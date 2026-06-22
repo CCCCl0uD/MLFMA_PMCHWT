@@ -1,0 +1,261 @@
+第 0 层的节点数量: 1
+节点 1 morton序号：0
+节点 1 的第 1 个realSons的Morton序号为: 7
+节点 1 的第 2 个realSons的Morton序号为: 6
+节点 1 的第 3 个realSons的Morton序号为: 5
+节点 1 的第 4 个realSons的Morton序号为: 4
+节点 1 的第 5 个realSons的Morton序号为: 3
+节点 1 的第 6 个realSons的Morton序号为: 2
+节点 1 的第 7 个realSons的Morton序号为: 1
+节点 1 的第 8 个realSons的Morton序号为: 0
+
+第 1 层的节点数量: 8
+节点 1 morton序号：7
+节点 1 的第 1 个realSons的Morton序号为: 62
+节点 1 的第 2 个realSons的Morton序号为: 61
+节点 1 的第 3 个realSons的Morton序号为: 60
+节点 1 的第 4 个realSons的Morton序号为: 59
+节点 1 的第 5 个realSons的Morton序号为: 58
+节点 1 的第 6 个realSons的Morton序号为: 57
+节点 2 morton序号：6
+节点 2 的第 1 个realSons的Morton序号为: 55
+节点 2 的第 2 个realSons的Morton序号为: 53
+节点 2 的第 3 个realSons的Morton序号为: 52
+节点 2 的第 4 个realSons的Morton序号为: 51
+节点 2 的第 5 个realSons的Morton序号为: 50
+节点 2 的第 6 个realSons的Morton序号为: 48
+节点 3 morton序号：5
+节点 3 的第 1 个realSons的Morton序号为: 47
+节点 3 的第 2 个realSons的Morton序号为: 46
+节点 3 的第 3 个realSons的Morton序号为: 44
+节点 3 的第 4 个realSons的Morton序号为: 43
+节点 3 的第 5 个realSons的Morton序号为: 41
+节点 3 的第 6 个realSons的Morton序号为: 40
+节点 4 morton序号：4
+节点 4 的第 1 个realSons的Morton序号为: 39
+节点 4 的第 2 个realSons的Morton序号为: 38
+节点 4 的第 3 个realSons的Morton序号为: 37
+节点 4 的第 4 个realSons的Morton序号为: 34
+节点 4 的第 5 个realSons的Morton序号为: 33
+节点 4 的第 6 个realSons的Morton序号为: 32
+节点 5 morton序号：3
+节点 5 的第 1 个realSons的Morton序号为: 31
+节点 5 的第 2 个realSons的Morton序号为: 30
+节点 5 的第 3 个realSons的Morton序号为: 29
+节点 5 的第 4 个realSons的Morton序号为: 26
+节点 5 的第 5 个realSons的Morton序号为: 25
+节点 5 的第 6 个realSons的Morton序号为: 24
+节点 6 morton序号：2
+节点 6 的第 1 个realSons的Morton序号为: 23
+节点 6 的第 2 个realSons的Morton序号为: 22
+节点 6 的第 3 个realSons的Morton序号为: 20
+节点 6 的第 4 个realSons的Morton序号为: 19
+节点 6 的第 5 个realSons的Morton序号为: 17
+节点 6 的第 6 个realSons的Morton序号为: 16
+节点 7 morton序号：1
+节点 7 的第 1 个realSons的Morton序号为: 15
+节点 7 的第 2 个realSons的Morton序号为: 13
+节点 7 的第 3 个realSons的Morton序号为: 12
+节点 7 的第 4 个realSons的Morton序号为: 11
+节点 7 的第 5 个realSons的Morton序号为: 10
+节点 7 的第 6 个realSons的Morton序号为: 8
+节点 8 morton序号：0
+节点 8 的第 1 个realSons的Morton序号为: 6
+节点 8 的第 2 个realSons的Morton序号为: 5
+节点 8 的第 3 个realSons的Morton序号为: 4
+节点 8 的第 4 个realSons的Morton序号为: 3
+节点 8 的第 5 个realSons的Morton序号为: 2
+节点 8 的第 6 个realSons的Morton序号为: 1
+第 2 层的节点数量: 48
+节点 1 morton序号：62
+节点 1 的第 1 个realSons的Morton序号为: 497
+节点 1 的第 2 个realSons的Morton序号为: 496
+节点 2 morton序号：61
+节点 2 的第 1 个realSons的Morton序号为: 490
+节点 2 的第 2 个realSons的Morton序号为: 488
+节点 3 morton序号：60
+节点 3 的第 1 个realSons的Morton序号为: 483
+节点 3 的第 2 个realSons的Morton序号为: 482
+节点 3 的第 3 个realSons的Morton序号为: 481
+节点 3 的第 4 个realSons的Morton序号为: 480
+节点 4 morton序号：59
+节点 4 的第 1 个realSons的Morton序号为: 476
+节点 4 的第 2 个realSons的Morton序号为: 472
+节点 5 morton序号：58
+节点 5 的第 1 个realSons的Morton序号为: 469
+节点 5 的第 2 个realSons的Morton序号为: 468
+节点 5 的第 3 个realSons的Morton序号为: 465
+节点 5 的第 4 个realSons的Morton序号为: 464
+节点 6 morton序号：57
+节点 6 的第 1 个realSons的Morton序号为: 462
+节点 6 的第 2 个realSons的Morton序号为: 460
+节点 6 的第 3 个realSons的Morton序号为: 458
+节点 6 的第 4 个realSons的Morton序号为: 456
+节点 7 morton序号：55
+节点 7 的第 1 个realSons的Morton序号为: 441
+节点 7 的第 2 个realSons的Morton序号为: 440
+节点 8 morton序号：53
+节点 8 的第 1 个realSons的Morton序号为: 427
+节点 8 的第 2 个realSons的Morton序号为: 426
+节点 8 的第 3 个realSons的Morton序号为: 425
+节点 8 的第 4 个realSons的Morton序号为: 424
+节点 9 morton序号：52
+节点 9 的第 1 个realSons的Morton序号为: 419
+节点 9 的第 2 个realSons的Morton序号为: 417
+节点 10 morton序号：51
+节点 10 的第 1 个realSons的Morton序号为: 413
+节点 10 的第 2 个realSons的Morton序号为: 412
+节点 10 的第 3 个realSons的Morton序号为: 409
+节点 10 的第 4 个realSons的Morton序号为: 408
+节点 11 morton序号：50
+节点 11 的第 1 个realSons的Morton序号为: 405
+节点 11 的第 2 个realSons的Morton序号为: 401
+节点 12 morton序号：48
+节点 12 的第 1 个realSons的Morton序号为: 391
+节点 12 的第 2 个realSons的Morton序号为: 389
+节点 12 的第 3 个realSons的Morton序号为: 387
+节点 12 的第 4 个realSons的Morton序号为: 385
+节点 13 morton序号：47
+节点 13 的第 1 个realSons的Morton序号为: 378
+节点 13 的第 2 个realSons的Morton序号为: 376
+节点 14 morton序号：46
+节点 14 的第 1 个realSons的Morton序号为: 371
+节点 14 的第 2 个realSons的Morton序号为: 370
+节点 14 的第 3 个realSons的Morton序号为: 369
+节点 14 的第 4 个realSons的Morton序号为: 368
+节点 15 morton序号：44
+节点 15 的第 1 个realSons的Morton序号为: 355
+节点 15 的第 2 个realSons的Morton序号为: 354
+节点 16 morton序号：43
+节点 16 的第 1 个realSons的Morton序号为: 350
+节点 16 的第 2 个realSons的Morton序号为: 348
+节点 16 的第 3 个realSons的Morton序号为: 346
+节点 16 的第 4 个realSons的Morton序号为: 344
+节点 17 morton序号：41
+节点 17 的第 1 个realSons的Morton序号为: 334
+节点 17 的第 2 个realSons的Morton序号为: 330
+节点 18 morton序号：40
+节点 18 的第 1 个realSons的Morton序号为: 327
+节点 18 的第 2 个realSons的Morton序号为: 326
+节点 18 的第 3 个realSons的Morton序号为: 323
+节点 18 的第 4 个realSons的Morton序号为: 322
+节点 19 morton序号：39
+节点 19 的第 1 个realSons的Morton序号为: 315
+节点 19 的第 2 个realSons的Morton序号为: 314
+节点 19 的第 3 个realSons的Morton序号为: 313
+节点 19 的第 4 个realSons的Morton序号为: 312
+节点 20 morton序号：38
+节点 20 的第 1 个realSons的Morton序号为: 307
+节点 20 的第 2 个realSons的Morton序号为: 305
+节点 21 morton序号：37
+节点 21 的第 1 个realSons的Morton序号为: 299
+节点 21 的第 2 个realSons的Morton序号为: 298
+节点 22 morton序号：34
+节点 22 的第 1 个realSons的Morton序号为: 279
+节点 22 的第 2 个realSons的Morton序号为: 277
+节点 22 的第 3 个realSons的Morton序号为: 275
+节点 22 的第 4 个realSons的Morton序号为: 273
+节点 23 morton序号：33
+节点 23 的第 1 个realSons的Morton序号为: 271
+节点 23 的第 2 个realSons的Morton序号为: 270
+节点 23 的第 3 个realSons的Morton序号为: 267
+节点 23 的第 4 个realSons的Morton序号为: 266
+节点 24 morton序号：32
+节点 24 的第 1 个realSons的Morton序号为: 263
+节点 24 的第 2 个realSons的Morton序号为: 259
+节点 25 morton序号：31
+节点 25 的第 1 个realSons的Morton序号为: 252
+节点 25 的第 2 个realSons的Morton序号为: 248
+节点 26 morton序号：30
+节点 26 的第 1 个realSons的Morton序号为: 245
+节点 26 的第 2 个realSons的Morton序号为: 244
+节点 26 的第 3 个realSons的Morton序号为: 241
+节点 26 的第 4 个realSons的Morton序号为: 240
+节点 27 morton序号：29
+节点 27 的第 1 个realSons的Morton序号为: 238
+节点 27 的第 2 个realSons的Morton序号为: 236
+节点 27 的第 3 个realSons的Morton序号为: 234
+节点 27 的第 4 个realSons的Morton序号为: 232
+节点 28 morton序号：26
+节点 28 的第 1 个realSons的Morton序号为: 213
+节点 28 的第 2 个realSons的Morton序号为: 212
+节点 29 morton序号：25
+节点 29 的第 1 个realSons的Morton序号为: 206
+节点 29 的第 2 个realSons的Morton序号为: 204
+节点 30 morton序号：24
+节点 30 的第 1 个realSons的Morton序号为: 199
+节点 30 的第 2 个realSons的Morton序号为: 198
+节点 30 的第 3 个realSons的Morton序号为: 197
+节点 30 的第 4 个realSons的Morton序号为: 196
+节点 31 morton序号：23
+节点 31 的第 1 个realSons的Morton序号为: 189
+节点 31 的第 2 个realSons的Morton序号为: 188
+节点 31 的第 3 个realSons的Morton序号为: 185
+节点 31 的第 4 个realSons的Morton序号为: 184
+节点 32 morton序号：22
+节点 32 的第 1 个realSons的Morton序号为: 181
+节点 32 的第 2 个realSons的Morton序号为: 177
+节点 33 morton序号：20
+节点 33 的第 1 个realSons的Morton序号为: 167
+节点 33 的第 2 个realSons的Morton序号为: 165
+节点 33 的第 3 个realSons的Morton序号为: 163
+节点 33 的第 4 个realSons的Morton序号为: 161
+节点 34 morton序号：19
+节点 34 的第 1 个realSons的Morton序号为: 157
+节点 34 的第 2 个realSons的Morton序号为: 156
+节点 35 morton序号：17
+节点 35 的第 1 个realSons的Morton序号为: 143
+节点 35 的第 2 个realSons的Morton序号为: 142
+节点 35 的第 3 个realSons的Morton序号为: 141
+节点 35 的第 4 个realSons的Morton序号为: 140
+节点 36 morton序号：16
+节点 36 的第 1 个realSons的Morton序号为: 135
+节点 36 的第 2 个realSons的Morton序号为: 133
+节点 37 morton序号：15
+节点 37 的第 1 个realSons的Morton序号为: 126
+节点 37 的第 2 个realSons的Morton序号为: 124
+节点 37 的第 3 个realSons的Morton序号为: 122
+节点 37 的第 4 个realSons的Morton序号为: 120
+节点 38 morton序号：13
+节点 38 的第 1 个realSons的Morton序号为: 110
+节点 38 的第 2 个realSons的Morton序号为: 106
+节点 39 morton序号：12
+节点 39 的第 1 个realSons的Morton序号为: 103
+节点 39 的第 2 个realSons的Morton序号为: 102
+节点 39 的第 3 个realSons的Morton序号为: 99
+节点 39 的第 4 个realSons的Morton序号为: 98
+节点 40 morton序号：11
+节点 40 的第 1 个realSons的Morton序号为: 94
+节点 40 的第 2 个realSons的Morton序号为: 92
+节点 41 morton序号：10
+节点 41 的第 1 个realSons的Morton序号为: 87
+节点 41 的第 2 个realSons的Morton序号为: 86
+节点 41 的第 3 个realSons的Morton序号为: 85
+节点 41 的第 4 个realSons的Morton序号为: 84
+节点 42 morton序号：8
+节点 42 的第 1 个realSons的Morton序号为: 71
+节点 42 的第 2 个realSons的Morton序号为: 70
+节点 43 morton序号：6
+节点 43 的第 1 个realSons的Morton序号为: 55
+节点 43 的第 2 个realSons的Morton序号为: 53
+节点 43 的第 3 个realSons的Morton序号为: 51
+节点 43 的第 4 个realSons的Morton序号为: 49
+节点 44 morton序号：5
+节点 44 的第 1 个realSons的Morton序号为: 47
+节点 44 的第 2 个realSons的Morton序号为: 46
+节点 44 的第 3 个realSons的Morton序号为: 43
+节点 44 的第 4 个realSons的Morton序号为: 42
+节点 45 morton序号：4
+节点 45 的第 1 个realSons的Morton序号为: 39
+节点 45 的第 2 个realSons的Morton序号为: 35
+节点 46 morton序号：3
+节点 46 的第 1 个realSons的Morton序号为: 31
+节点 46 的第 2 个realSons的Morton序号为: 30
+节点 46 的第 3 个realSons的Morton序号为: 29
+节点 46 的第 4 个realSons的Morton序号为: 28
+节点 47 morton序号：2
+节点 47 的第 1 个realSons的Morton序号为: 23
+节点 47 的第 2 个realSons的Morton序号为: 21
+节点 48 morton序号：1
+节点 48 的第 1 个realSons的Morton序号为: 15
+节点 48 的第 2 个realSons的Morton序号为: 14

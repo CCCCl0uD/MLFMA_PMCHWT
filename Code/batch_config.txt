@@ -1,0 +1,38 @@
+# MLFMA 批量仿真配置文件
+# 行首 # 为注释
+# .\MLFMA.exe batch D:\MyCode\C++\MLFMA\Code\batch_config.txt
+
+# ============ 网格文件（分号分隔多个路径） ============
+nas_files = D:\MyCode\C++\MLFMA\DATA\Sphere_1e9\Sphere_1e9.nas
+
+# ============ 频率列表 (Hz)，逗号分隔 ============
+frequencies = 1.0e9
+
+# ============ 入射角度 ============
+# 方式1：直接列出 theta:phi 对（逗号分隔）
+incident_angles = 90:0, 60:0, 45:0, 30:0
+
+# 方式2：theta 范围扫描（start:end:step），phi 固定为 0
+# incident_theta_range = 0:180:10
+
+# 方式3：phi 范围扫描（与已有 theta 组合）
+# incident_phi_range = 0:350:10
+
+# ============ 散射角度范围 ============
+sca_theta = 90:90
+sca_phi = 0:360
+step = 1
+
+# ============ 仿真参数 ============
+algorithm = 2
+integral_equation = 1
+mono_dual = dual
+gauss_points = 7
+omp_threads = 14
+
+# ============ 介质参数（仅 PMCHWT 时有效） ============
+# epsilon_r = 4.0, -0.001
+# mu_r = 1.0，0.0
+
+# ============ 并行线程数 ============
+# omp_threads = 14
