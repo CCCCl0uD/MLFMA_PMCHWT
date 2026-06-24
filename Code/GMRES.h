@@ -205,7 +205,7 @@ namespace MGMRES {
 				if (verbose) std::cout << "GMRES reached max iterations, final residual: " << error << "\n";
 				return false;
 			}
-			if (error > 100.0 * tol_rel && restart_cycle > 3) {
+			if (error > 100.0 * tol_rel && restart_cycle > 8) {
 				if (verbose) std::cout << "Warning: residual growing rapidly, algorithm may be unstable\n";
 				if (error > 1000.0 * tol_rel) {
 					if (verbose) std::cout << "Residual too large, terminating early\n";

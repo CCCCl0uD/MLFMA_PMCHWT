@@ -3,6 +3,7 @@
 #include "AlgoFMM.h"
 #include "AlgoMLFMM.h"
 #include "GMRES.h"
+#include "CGS.h"
 #include "ProcessFMM.h"
 #include "ProcessMLFMM.h"
 #include "Zmartix.h"
@@ -12,12 +13,12 @@
 /**************************************************************************************************/
 /**************************************************************************************************/
 MLFMM::MLFMM(
-	const RCSExportConfig& cfg, const int selectIntegralEqu, const std::string selectMono_Dual, const std::string pol_wave,
+	const RCSExportConfig& cfg, const int selectIntegralEqu, const int selectMatrixSolver, const std::string selectMono_Dual, const std::string pol_wave,
 	const std::vector<std::vector<OCTree::Node*>>& octreeNodes,
 	const std::vector<std::vector<OCTree::nodePoint>>& octreeNodesDRvec_,
 	const std::vector<RWGBase>& rwgs, const int maxLevel_,
 	const gaussPoints& gausspoint, const double E0, const EMSource& wave)
-	: octreeNodes_(octreeNodes), octreeNodesDRvec_(octreeNodesDRvec_), rwgs(rwgs), maxLevel_(maxLevel_), gausspoint(gausspoint), E0(E0), wave(wave), integralEquType_(selectIntegralEqu)
+	: octreeNodes_(octreeNodes), octreeNodesDRvec_(octreeNodesDRvec_), rwgs(rwgs), maxLevel_(maxLevel_), gausspoint(gausspoint), E0(E0), wave(wave), integralEquType_(selectIntegralEqu), matrixSolverType_(selectMatrixSolver)
 {
 	// Compute base data: k, top level theta, L, levelSpan
 	// Compute Vsmi/Vfmj matrices theta/phi angles and weights from maxLevel_ down to level 2
@@ -150,7 +151,7 @@ size_t MLFMM::computeMem() {
 	return memBase + memVsmi_Vfmi + memTF + memZ_near + memInterp + memSm_Bm + memV;
 }
 
-void MLFMM::mgmres_solver(int n, std::complex<double> x[], std::complex<double> rhs[], int itr_max, int mr, double tol_abs, double tol_rel) {
+void MLFMM::matrix_solver(int n, std::complex<double> x[], std::complex<double> rhs[], int itr_max, int mr, double tol_abs, double tol_rel) {
 	const int tN_k1 = static_cast<int>(theta_level_k1[0].size());
 	const int pN_k1 = static_cast<int>(phi_level_k1[0].size());
 	const int maxlvl = maxLevel_;
@@ -231,9 +232,32 @@ void MLFMM::mgmres_solver(int n, std::complex<double> x[], std::complex<double> 
 			}
 		}
 		};
-	bool converged = MGMRES::mgmres(n, x, rhs, itr_max, mr, tol_abs, tol_rel, ax);
-	if (!converged) {
-		std::cerr << "MGMRES did not converge.\n";
+	bool converged = false;
+
+	switch (matrixSolverType_) {
+	case 0:
+		std::cout << "Matrix solver: GMRES (FMM)\n";
+		converged = MGMRES::mgmres(
+			n, x, rhs, itr_max, mr, tol_abs, tol_rel, ax);
+		if (!converged) {
+			std::cerr << "GMRES did not converge (FMM).\n";
+		}
+		break;
+
+	case 1:
+		std::cout << "Matrix solver: CGS (FMM)\n";
+		converged = MCGS::CGS::solve(
+			n, x, rhs, itr_max, tol_rel, ax);
+		if (!converged) {
+			std::cerr
+				<< "CGS did not converge or encountered breakdown (FMM).\n";
+		}
+		break;
+
+	default:
+		throw std::invalid_argument(
+			"Invalid matrixSolverType_ in FMM "
+			"(must be 0 for GMRES or 1 for CGS)");
 	}
 }
 

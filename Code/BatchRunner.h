@@ -29,6 +29,7 @@ struct SimTask {
 	double step;						 // 角度步进
 	int selectAlgorithm;				 // 0=MoM, 1=FMM, 2=MLFMM
 	int selectIntegralEqu;				 // 0=EFIE, 1=CFIE, 2=PMCHWT
+	int selectMatrixSolver;				 // 0=GMRES, 1=CGS
 	std::string selectMono_Dual;		 // "mono" 或 "dual"
 	int N_points;						 // 高斯积分点数
 	double epsilonR_real, epsilonR_imag; // 介电常数 (PMCHWT)
@@ -48,6 +49,7 @@ struct BatchConfig {
 
 	int selectAlgorithm = 2;       // 默认 MLFMM
 	int selectIntegralEqu = 1;     // 默认 CFIE
+	int selectMatrixSolver = 0;    // 默认 GMRES
 	std::string selectMono_Dual = "dual";
 	int N_points = 7;
 	double epsilonR_real = 1.0;
@@ -74,6 +76,7 @@ struct BatchConfig {
 					task.step = step;
 					task.selectAlgorithm = selectAlgorithm;
 					task.selectIntegralEqu = selectIntegralEqu;
+					task.selectMatrixSolver = selectMatrixSolver;
 					task.selectMono_Dual = selectMono_Dual;
 					task.N_points = N_points;
 					task.epsilonR_real = epsilonR_real;
@@ -184,6 +187,9 @@ public:
 			else if (key == "integral_equation") {
 				cfg.selectIntegralEqu = std::stoi(value);
 			}
+			else if (key == "matrix_solver") {
+				cfg.selectMatrixSolver = std::stoi(value);
+			}
 			else if (key == "mono_dual") {
 				cfg.selectMono_Dual = value;
 			}
@@ -248,7 +254,9 @@ public:
 			std::cout << "  Freq: " << task.freq / 1e9 << " GHz\n";
 			std::cout << "  Inc: theta=" << task.inc_th << ", phi=" << task.inc_ph << "\n";
 			std::cout << "  Algo: " << task.selectAlgorithm
-				<< ", IE: " << task.selectIntegralEqu << "\n";
+				<< ", IE: " << task.selectIntegralEqu
+				<< ", Solver: " << task.selectMatrixSolver
+				<< " (0=GMRES, 1=CGS)\n";
 			std::cout << "  Polarization: h -> v (sequential)\n";
 			std::cout << "----------------------------------------\n";
 
@@ -279,6 +287,13 @@ private:
 		try {
 			omp_set_dynamic(0);
 			omp_set_num_threads(task.ompThreads);
+
+			if (task.selectMatrixSolver != 0 && task.selectMatrixSolver != 1) {
+				throw std::invalid_argument(
+					"Invalid matrix_solver value: "
+					+ std::to_string(task.selectMatrixSolver)
+					+ " (must be 0 for GMRES or 1 for CGS)");
+			}
 
 			// 1. 读取网格
 			std::vector<Point> points;
@@ -349,17 +364,17 @@ private:
 
 				// 执行求解
 				if (task.selectAlgorithm == 0) {
-					MoM mom(cfg, task.selectIntegralEqu, task.selectMono_Dual,
+					MoM mom(cfg, task.selectIntegralEqu, task.selectMatrixSolver, task.selectMono_Dual,
 						pol, octree.octreeNodes_, rwgBases,
 						octree.maxLevel_, gausspoint, E0, wave);
 				}
 				else if (task.selectAlgorithm == 1) {
-					FMM fmm(cfg, task.selectIntegralEqu, task.selectMono_Dual,
+					FMM fmm(cfg, task.selectIntegralEqu, task.selectMatrixSolver, task.selectMono_Dual,
 						pol, octree.octreeNodes_, rwgBases,
 						octree.maxLevel_, gausspoint, E0, wave);
 				}
 				else if (task.selectAlgorithm == 2) {
-					MLFMM mlfmm(cfg, task.selectIntegralEqu, task.selectMono_Dual,
+					MLFMM mlfmm(cfg, task.selectIntegralEqu, task.selectMatrixSolver, task.selectMono_Dual,
 						pol, octree.octreeNodes_, octree.octreeNodesDRvec_,
 						rwgBases, octree.maxLevel_, gausspoint, E0, wave);
 				}

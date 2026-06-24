@@ -24,8 +24,15 @@ sca_phi = 0:360
 step = 1
 
 # ============ 仿真参数 ============
+# algorithm: 0 = MoM, 1 = FMM, 2 = MLFMM
 algorithm = 2
+
+# integral_equation: 0 = EFIE, 1 = CFIE, 2 = PMCHWT
 integral_equation = 1
+
+# matrix_solver: 0 = GMRES, 1 = CGS
+matrix_solver = 1
+
 mono_dual = dual
 gauss_points = 7
 omp_threads = 14

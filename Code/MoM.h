@@ -10,7 +10,8 @@
 
 class MoM {
 public:
-	MoM(const RCSExportConfig& cfg, const int selectIntegralEqu, const std::string selectMono_Dual, const std::string pol_wave,
+	MoM(const RCSExportConfig& cfg, const int selectIntegralEqu, const int selectMatrixSolver,
+		const std::string selectMono_Dual, const std::string pol_wave,
 		const std::vector<std::vector<OCTree::Node*>>& octreeNodes, const std::vector<RWGBase>& rwgs, const int maxLevel_,
 		const gaussPoints& gausspoint, const double E0, const EMSource& wave);
 
@@ -22,12 +23,13 @@ public:
 	const gaussPoints& gausspoint;
 	const EMSource& wave;
 	const int integralEquType_;
+	const int matrixSolverType_;
 	std::vector<std::complex<double>> Vm;                 // ”“±ﬂœÚ¡ø
 	std::vector<std::vector<std::complex<double>>> Z_mom;
 
 	size_t computeMem();
 
-	void mgmres_solver(int n, std::complex<double> x[], std::complex<double> rhs[], int itr_max, int mr, double tol_abs, double tol_rel);
+	void matrix_solver(int n, std::complex<double> x[], std::complex<double> rhs[], int itr_max, int mr, double tol_abs, double tol_rel);
 
 private:
 	void mom_Dual_Pec_Efie(const RCSExportConfig& cfg, const std::string pol_wave);

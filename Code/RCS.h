@@ -223,7 +223,7 @@ namespace RCSUtils {
 			I_solve[i] = std::complex<double>(0.0, 0.0);
 			Vec_R[i] = solver.Vm[i];
 		}
-		solver.mgmres_solver(solver.row, I_solve, Vec_R, itr_max, mr, tol_abs, tol_rel);
+		solver.matrix_solver(solver.row, I_solve, Vec_R, itr_max, mr, tol_abs, tol_rel);
 
 		// 导出 I
 		//exportI(solver, cfg, I_solve);
@@ -312,7 +312,7 @@ namespace RCSUtils {
 				I_solve[i] = 0.0;
 				Vec_R[i] = solver.Vm[i];
 			}
-			solver.mgmres_solver(solver.row, I_solve, Vec_R, itr_max, mr, tol_abs, tol_rel);
+			solver.matrix_solver(solver.row, I_solve, Vec_R, itr_max, mr, tol_abs, tol_rel);
 			// 写入 I
 			/*for (int i = 0; i < solver.row; ++i) {
 				iFile << std::setw(16) << th_mono << "\t" << ph_mono << "\t" << i << "\t" << I_solve[i] << "\n";
@@ -367,7 +367,7 @@ namespace RCSUtils {
 			I_solve[i] = std::complex<double>(0.0, 0.0);
 			Vec_R[i] = solver.Vm[i];
 		}
-		solver.mgmres_solver(totalRow, I_solve, Vec_R,
+		solver.matrix_solver(totalRow, I_solve, Vec_R,
 			itr_max, mr, tol_abs, tol_rel);
 
 		// 前 N = I_J, 后 N = I_M
@@ -459,7 +459,7 @@ namespace RCSUtils {
 				I_solve[i] = 0.0;
 				Vec_R[i] = solver.Vm[i];
 			}
-			solver.mgmres_solver(totalRow, I_solve, Vec_R,
+			solver.matrix_solver(totalRow, I_solve, Vec_R,
 				itr_max, mr, tol_abs, tol_rel);
 
 			std::complex<double>* I_J = I_solve;

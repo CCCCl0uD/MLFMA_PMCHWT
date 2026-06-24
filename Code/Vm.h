@@ -178,8 +178,8 @@ namespace RHS {
 				std::complex<double> phase1 = k1 * (kInc[0] * rr[0] + kInc[1] * rr[1] + kInc[2] * rr[2]);
 				std::complex<double> e_k1 = exp(-J * phase1);
 
-				Vm[rwgid] += -lm * gp.weight[i] * dot(eInc, rho) * e_k1;
-				Vm[N + rwgid] += -lm * gp.weight[i] * dot(hInc, rho) * e_k1;
+				Vm[rwgid] += lm * gp.weight[i] * dot(eInc, rho) * e_k1;
+				Vm[N + rwgid] += lm * gp.weight[i] * dot(hInc, rho) * e_k1;
 
 				rr = {
 					gp.l1[i] * r->negativeFace->vertex1->x + gp.l2[i] * r->negativeFace->vertex2->x + gp.l3[i] * r->negativeFace->vertex3->x,
@@ -196,8 +196,8 @@ namespace RHS {
 				phase1 = k1 * (kInc[0] * rr[0] + kInc[1] * rr[1] + kInc[2] * rr[2]);
 				e_k1 = exp(-J * phase1);
 
-				Vm[rwgid] += -lm * gp.weight[i] * dot(eInc, rho) * e_k1;
-				Vm[N + rwgid] += -lm * gp.weight[i] * dot(hInc, rho) * e_k1;
+				Vm[rwgid] += lm * gp.weight[i] * dot(eInc, rho) * e_k1;
+				Vm[N + rwgid] += lm * gp.weight[i] * dot(hInc, rho) * e_k1;
 			}
 		}
 	}

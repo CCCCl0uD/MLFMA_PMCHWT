@@ -80,7 +80,7 @@ int main(int argc, char* argv[]) {
 	// ------- Single -------
 	std::vector<Point> points;
 	std::vector<FaceElement> faces;
-	const std::string inputFile = "D:\\MyCode\\C++\\MLFMA\\DATA\\Sphere_Die_1e9\\Sphere_Die_1e9.nas";
+	const std::string inputFile = "D:\\MyCode\\PMCHWT_MLFMA\\DATA\\Sphere_Die_1e9\\Sphere_Die_1e9.nas";
 	/************************************************************************/
 	double freq = 1.0e9, E0 = 1.0;
 	double inc_th = 90.0, inc_ph = 0.0;
@@ -93,6 +93,7 @@ int main(int argc, char* argv[]) {
 	std::string polarization = "h";// horizontal->90 / vertical->0
 	int selectAlgorithm = 0;// 0==>MoM;1==>FMM;2==>MLFMM
 	int selectIntegralEqu = 2;// 0==>EFIE;1==>CFIE;2==>PMCHWT
+	int selectMatrixSolver = 1;// 0==>GMRES;1==>CGS
 	std::complex<double> epsilonR(4.0, 0.001);
 	std::complex<double> muR(1.0, 0.0);
 	/************************************************************************/
@@ -149,9 +150,16 @@ int main(int argc, char* argv[]) {
 	auto durationOCTree = std::chrono::duration_cast<std::chrono::microseconds>(endOCTree - startOCTree);
 	std::cout << "<<<< Info: OCTree built, elapsed: " << durationOCTree.count() / 1000.0 << " ms >>>> (main.cpp)\n" << std::endl;
 
+	if (selectMatrixSolver != 0 && selectMatrixSolver != 1) {
+		std::cerr << "Error: Invalid selectMatrixSolver value: "
+			<< selectMatrixSolver
+			<< " (0 = GMRES, 1 = CGS)" << std::endl;
+		return 3;
+	}
+
 	if (selectAlgorithm == 0) {
 		auto startMoM = std::chrono::high_resolution_clock::now();
-		MoM mom(cfg, selectIntegralEqu, selectMono_Dual, polarization,
+		MoM mom(cfg, selectIntegralEqu, selectMatrixSolver, selectMono_Dual, polarization,
 			octree.octreeNodes_, rwgBases, octree.maxLevel_, gausspoint,
 			E0, wave);
 		auto endMoM = std::chrono::high_resolution_clock::now();
@@ -160,7 +168,7 @@ int main(int argc, char* argv[]) {
 	}
 	else if (selectAlgorithm == 1) {
 		auto startFMM = std::chrono::high_resolution_clock::now();
-		FMM fmm(cfg, selectIntegralEqu, selectMono_Dual, polarization,
+		FMM fmm(cfg, selectIntegralEqu, selectMatrixSolver, selectMono_Dual, polarization,
 			octree.octreeNodes_, rwgBases, octree.maxLevel_, gausspoint,
 			E0, wave);
 		auto endFMM = std::chrono::high_resolution_clock::now();
@@ -169,7 +177,7 @@ int main(int argc, char* argv[]) {
 	}
 	else if (selectAlgorithm == 2) {
 		auto startMLFMA = std::chrono::high_resolution_clock::now();
-		MLFMM mlfmm(cfg, selectIntegralEqu, selectMono_Dual, polarization,
+		MLFMM mlfmm(cfg, selectIntegralEqu, selectMatrixSolver, selectMono_Dual, polarization,
 			octree.octreeNodes_, octree.octreeNodesDRvec_, rwgBases, octree.maxLevel_, gausspoint,
 			E0, wave);
 		auto endMLFMA = std::chrono::high_resolution_clock::now();
