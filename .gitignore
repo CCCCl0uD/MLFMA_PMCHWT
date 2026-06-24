@@ -37,3 +37,6 @@ x86/
 *.bak
 *~
 ~$*
+
+# Local third-party archives
+README/外部库/

@@ -11,7 +11,7 @@
 class MLFMM {
 public:
 	MLFMM(
-		const RCSExportConfig& cfg, const int selectIntegralEqu, const std::string selectMono_Dual, const std::string pol_wave,
+		const RCSExportConfig& cfg, const int selectIntegralEqu, const int selectMatrixSolver, const std::string selectMono_Dual, const std::string pol_wave,
 		const std::vector<std::vector<OCTree::Node*>>& octreeNodes,
 		const std::vector<std::vector<OCTree::nodePoint>>& octreeNodesDRvec_,
 		const std::vector<RWGBase>& rwgs, const int maxLevel_,
@@ -23,6 +23,7 @@ public:
 	const int maxLevel_;                                            // 八叉树最大层级
 	const double E0;
 	const int integralEquType_;
+	const int matrixSolverType_;
 	int L_k1, L_k2;                                       // 多极子模式数
 	int levelSpan;                                        // 级数跨度
 	int row;                                              // RWG基函数个数
@@ -63,7 +64,7 @@ public:
 	std::vector<std::complex<double>> Vm;                                       // 右边向量
 
 	size_t computeMem();
-	void mgmres_solver(int n, std::complex<double> x[], std::complex<double> rhs[], int itr_max, int mr, double tol_abs, double tol_rel);
+	void matrix_solver(int n, std::complex<double> x[], std::complex<double> rhs[], int itr_max, int mr, double tol_abs, double tol_rel);
 
 private:
 	void initMLFMMStorage();

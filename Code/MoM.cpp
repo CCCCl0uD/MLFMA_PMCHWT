@@ -2,14 +2,15 @@
 #include "Zmartix.h"
 #include "Vm.h"
 #include "GMRES.h"
+#include "CGS.h"
 #include "RCS.h"
 #include "MoM.h"
 
 MoM::MoM(
-	const RCSExportConfig& cfg, const int selectIntegralEqu, const std::string selectMono_Dual, const std::string pol_wave,
+	const RCSExportConfig& cfg, const int selectIntegralEqu, const int selectMatrixSolver, const std::string selectMono_Dual, const std::string pol_wave,
 	const std::vector<std::vector<OCTree::Node*>>& octreeNodes, const std::vector<RWGBase>& rwgs, const int maxLevel_,
 	const gaussPoints& gausspoint, const double E0, const EMSource& wave)
-	: octreeNodes_(octreeNodes), rwgs(rwgs), maxLevel_(maxLevel_), gausspoint(gausspoint), E0(E0), wave(wave), integralEquType_(selectIntegralEqu)
+	: octreeNodes_(octreeNodes), rwgs(rwgs), maxLevel_(maxLevel_), gausspoint(gausspoint), E0(E0), wave(wave), integralEquType_(selectIntegralEqu), matrixSolverType_(selectMatrixSolver)
 {
 	row = static_cast<int>(rwgs.size());
 
@@ -84,7 +85,7 @@ size_t MoM::computeMem() {
 	return memZ_mom + memV;
 }
 
-void MoM::mgmres_solver(
+void MoM::matrix_solver(
 	int n, std::complex<double> x[], std::complex<double> rhs[],
 	int itr_max, int mr, double tol_abs, double tol_rel)
 {
@@ -98,9 +99,26 @@ void MoM::mgmres_solver(
 			w[i] = sum;
 		}
 		};
-	bool converged = MGMRES::mgmres(n, x, rhs, itr_max, mr, tol_abs, tol_rel, ax);
-	if (!converged) {
-		std::cerr << "MGMRES did not converge.\n";
+	bool converged = false;
+	switch (matrixSolverType_)
+	{
+	case 0:
+		std::cout << "Matrix solver: GMRES\n";
+		converged = MGMRES::mgmres(n, x, rhs, itr_max, mr, tol_abs, tol_rel, ax);
+		if (!converged) {
+			std::cerr << "GMRES did not converge.\n";
+		}
+		break;
+	case 1:
+		std::cout << "Matrix solver: CGS\n";
+		converged = MCGS::CGS::solve(n, x, rhs, itr_max, tol_rel, ax);
+		if (!converged) {
+			std::cerr << "CGS did not converge.\n";
+		}
+		break;
+	default:
+		throw std::invalid_argument(
+			"Invalid matrixSolverType_ (must be 0 for GMRES or 1 for CGS)");
 	}
 }
 

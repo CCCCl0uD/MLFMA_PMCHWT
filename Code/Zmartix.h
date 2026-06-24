@@ -508,12 +508,6 @@ namespace Zmartix {
 				std::complex<double> ZL1(0.0, 0.0), ZL2(0.0, 0.0);
 				std::complex<double> ZK1(0.0, 0.0), ZK2(0.0, 0.0);
 
-				//EFIE::computeEFIE_Zij(rwgField, rwgSource, wave.k1(), wave.eta1(), gausspoint, ZL1);
-				//EFIE::computeEFIE_Zij(rwgField, rwgSource, wave.k2(), wave.eta2(), gausspoint, ZL2);
-
-				//MFIE::computeMFIE_Zij(rwgField, rwgSource, wave.k1(), gausspoint, ZK1);
-				//MFIE::computeMFIE_Zij(rwgField, rwgSource, wave.k2(), gausspoint, ZK2);
-
 				OLK::L_operator(rwgField, rwgSource, wave.k1(), gausspoint, ZL1);
 				OLK::L_operator(rwgField, rwgSource, wave.k2(), gausspoint, ZL2);
 

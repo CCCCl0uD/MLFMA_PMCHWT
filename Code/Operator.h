@@ -316,7 +316,8 @@ namespace OLK {
 			mul(&pomVec1[0], &rhotmp[0], Isca);
 			add(&pomVec2[0], &Ivec[0], &pomVec1[0]);
 			mul(&Ikon[0], &pomVec2[0], recAs);
-			alok += wF * 2.0 * areaTriF * (J * k_ * dot(&RWGf[0], &Ikon[0]) - (J / k_) * (double(1.0 / areaTriF)) * (double(1.0 / areaTriS)) * (Isca));
+			alok += J * k_ * wF * 2.0 * areaTriF * (dot(&RWGf[0], &Ikon[0])
+				- (1.0 / (k_ * k_)) * (double(1.0 / (areaTriF * areaTriS))) * (Isca));
 		}
 	}
 
@@ -673,7 +674,6 @@ namespace OLK {
 
 			// testing Galerkin
 			sub(&pomocvF[0], &fieldPoint[0], nonPublicEdge_vertexF);
-
 			mul(&RWGf[0], &pomocvF[0], recAf);
 
 			sub(&Rivec[0], &fieldPoint[0], nonPublicEdge_vertexS);
@@ -682,19 +682,22 @@ namespace OLK {
 			mul(&pomNvec[0], normalVectorS, K1);
 			sub(&rho0N[0], nonPublicEdge_vertexS, &pomNvec[0]);
 
-			konst1 = k_ * k_ / 2.0;
+			sub(&pomVec1[0], &rho[0], &rho0N[0]);
+
+			// k²/(2R) 奇异部分
+			konst1 = k_ * k_ * 0.5;
 			konst2 = konst1 * Isca1R;
 
-			sub(&pomVec1[0], &rho[0], &rho0N[0]);
 			mul(&pomVec2[0], &Ivec1R[0], konst1);
 			mul(&pomVec3[0], &pomVec1[0], konst2);
 			add(&pomVec4[0], &pomVec2[0], &pomVec3[0]);
-
 			mul(&Ikon1R[0], &pomVec4[0], recAs);
 
+			// 1/R³ 奇异部分
 			mul(&pomVec5[0], &pomVec1[0], Isca1R3);
 			add(&pomVec6[0], &Ivec1R3[0], &pomVec5[0]);
 			mul(&Ikon1R3[0], &pomVec6[0], recAs);
+
 			add(&Ikon[0], &Ikon1R3[0], &Ikon1R[0]);
 
 			cross(&KROSS1[0], &Rivec[0], &Ikon[0]);
@@ -810,9 +813,9 @@ namespace OLK {
 							// 计算该源面元下的RWG基函数值
 							mul(&RWGs[0], &pomocvS[0], constRWGSource);
 
-							alok1 += wF * wS * 4.0 * areaTriF * areaTriS *
-								(J * k_ * G * dot(&RWGf[0], &RWGs[0]) -
-									(J / k_) * G * (1.0 / (areaTriF * areaTriS)));
+							alok1 += J * k_ * wF * wS * 4.0 * areaTriF * areaTriS *
+								(G * dot(&RWGf[0], &RWGs[0]) -
+									(1.0 / (k_ * k_)) * G * (1.0 / (areaTriF * areaTriS)));
 						}
 					}
 				}
@@ -857,9 +860,9 @@ namespace OLK {
 							// 计算该源面元下的RWG基函数值
 							mul(&RWGs[0], &pomocvS[0], constRWGSource);
 
-							alok1 += wF * wS * 4.0 * areaTriF * areaTriS *
-								(J * k_ * G_Sing * dot(&RWGf[0], &RWGs[0]) -
-									(J / k_) * G_Sing * (1.0 / (areaTriF * areaTriS)));
+							alok1 += J * k_ * wF * wS * 4.0 * areaTriF * areaTriS *
+								(G_Sing * dot(&RWGf[0], &RWGs[0]) -
+									(1.0 / (k_ * k_)) * G_Sing * (1.0 / (areaTriF * areaTriS)));
 						}
 					}
 					singL(areaTriF, areaTriS,
@@ -969,14 +972,14 @@ namespace OLK {
 
 							sub(&Rvec[0], &fieldPoint[0], &sourcePoint[0]);
 
-							std::complex<double> G = -(exp(-J * k_ * R) / (R * R * R)) * (1.0 + J * k_ * R);
+							std::complex<double> G = (exp(-J * k_ * R) / (R * R * R)) * (1.0 + J * k_ * R);
 
 							sub(&pomocvF[0], &fieldPoint[0], nonPublicEdge_vertexF);
 							sub(&pomocvS[0], &sourcePoint[0], nonPublicEdge_vertexS);
 
 							cross(&CROSS1[0], &Rvec[0], &pomocvS[0]);
 
-							std::complex<double> contrib = wF * wS * (G * dot(&pomocvF[0], &CROSS1[0]));
+							std::complex<double> contrib = wF * wS * G * dot(&pomocvF[0], &CROSS1[0]);
 							alok1 += contrib;
 						}
 					}
@@ -1005,21 +1008,20 @@ namespace OLK {
 							sub(&Rvec[0], &fieldPoint[0], &sourcePoint[0]);
 
 							std::complex<double> G;
-
 							if (R < eps0) {
 								G = std::complex<double>(0.0, 0.0);
 							}
 							else {
-								G = -(exp(-J * k_ * R) / (R * R * R)) * (1.0 + J * k_ * R) + 1.0 / (R * R * R) + 0.5 * (k_ * k_) * (1.0 / R);
+								G = (exp(-J * k_ * R) / (R * R * R)) * (1.0 + J * k_ * R)
+									- 1.0 / (R * R * R) - 0.5 * (k_ * k_) * (1.0 / R);
 							}
 
 							sub(&pomocvF[0], &fieldPoint[0], nonPublicEdge_vertexF);
 							sub(&pomocvS[0], &sourcePoint[0], nonPublicEdge_vertexS);
 
-
 							cross(&CROSS1[0], &Rvec[0], &pomocvS[0]);
 
-							std::complex<double> contrib = wF * wS * (G * dot(&CROSS1[0], &pomocvF[0]));
+							std::complex<double> contrib = wF * wS * G * dot(&pomocvF[0], &CROSS1[0]);
 							alok1 += contrib;
 						}
 					}

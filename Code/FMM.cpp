@@ -2,16 +2,17 @@
 #include "FMM.h"
 #include "AlgoFMM.h"
 #include "GMRES.h"
+#include "CGS.h"
 #include "ProcessFMM.h"
 #include "Zmartix.h"
 #include "Vm.h"
 #include "RCS.h"
 
-FMM::FMM(const RCSExportConfig& cfg, const int selectIntegralEqu, const std::string selectMono_Dual, const std::string pol_wave,
+FMM::FMM(const RCSExportConfig& cfg, const int selectIntegralEqu, const int selectMatrixSolver, const std::string selectMono_Dual, const std::string pol_wave,
 	const std::vector<std::vector<OCTree::Node*>>& octreeNodes,
 	const std::vector<RWGBase>& rwgs, const int maxLevel_,
 	const gaussPoints& gausspoint, const double E0, const EMSource& wave)
-	: octreeNodes_(octreeNodes), rwgs(rwgs), maxLevel_(maxLevel_), gausspoint(gausspoint), E0(E0), wave(wave), integralEquType_(selectIntegralEqu)
+	: octreeNodes_(octreeNodes), rwgs(rwgs), maxLevel_(maxLevel_), gausspoint(gausspoint), E0(E0), wave(wave), integralEquType_(selectIntegralEqu), matrixSolverType_(selectMatrixSolver)
 {
 	// Compute base data: k, top level theta, L, levelSpan
 	// Compute Vsmi/Vfmj matrices theta/phi angles and weights from maxLevel_ down to level 2
@@ -109,7 +110,7 @@ size_t FMM::computeMem() {
 	return memBase + memVsmi + memZ + memTF + memSmBm;
 }
 
-void FMM::mgmres_solver(int n, std::complex<double> x[], std::complex<double> rhs[], int itr_max, int mr, double tol_abs, double tol_rel) {
+void FMM::matrix_solver(int n, std::complex<double> x[], std::complex<double> rhs[], int itr_max, int mr, double tol_abs, double tol_rel) {
 	const int EquType_ = integralEquType_;
 
 	auto ax = [this, EquType_](int n, const std::complex<double>* x, std::complex<double>* w) {
@@ -415,9 +416,32 @@ void FMM::mgmres_solver(int n, std::complex<double> x[], std::complex<double> rh
 			}
 		}
 		};// end ax lambda
-	bool converged = MGMRES::mgmres(n, x, rhs, itr_max, mr, tol_abs, tol_rel, ax);
-	if (!converged) {
-		std::cerr << "MGMRES did not converge.\n";
+	bool converged = false;
+
+	switch (matrixSolverType_) {
+	case 0:
+		std::cout << "Matrix solver: GMRES (FMM)\n";
+		converged = MGMRES::mgmres(
+			n, x, rhs, itr_max, mr, tol_abs, tol_rel, ax);
+		if (!converged) {
+			std::cerr << "GMRES did not converge (FMM).\n";
+		}
+		break;
+
+	case 1:
+		std::cout << "Matrix solver: CGS (FMM)\n";
+		converged = MCGS::CGS::solve(
+			n, x, rhs, itr_max, tol_rel, ax);
+		if (!converged) {
+			std::cerr
+				<< "CGS did not converge or encountered breakdown (FMM).\n";
+		}
+		break;
+
+	default:
+		throw std::invalid_argument(
+			"Invalid matrixSolverType_ in FMM "
+			"(must be 0 for GMRES or 1 for CGS)");
 	}
 }
 
