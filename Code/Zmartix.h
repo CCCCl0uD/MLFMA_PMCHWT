@@ -508,8 +508,8 @@ namespace Zmartix {
 				std::complex<double> ZL1(0.0, 0.0), ZL2(0.0, 0.0);
 				std::complex<double> ZK1(0.0, 0.0), ZK2(0.0, 0.0);
 
-				OLK::L_operator(rwgField, rwgSource, wave.k1(), wave.eta1(), gausspoint, ZL1);
-				OLK::L_operator(rwgField, rwgSource, wave.k2(), wave.eta2(), gausspoint, ZL2);
+				OLK::L_operator(rwgField, rwgSource, wave.k1(), gausspoint, ZL1);
+				OLK::L_operator(rwgField, rwgSource, wave.k2(), gausspoint, ZL2);
 
 				OLK::K_operator(rwgField, rwgSource, wave.k1(), gausspoint, ZK1);
 				OLK::K_operator(rwgField, rwgSource, wave.k2(), gausspoint, ZK2);
@@ -602,23 +602,27 @@ namespace Zmartix {
 						std::complex<double> ZL1(0.0, 0.0), ZL2(0.0, 0.0);
 						std::complex<double> ZK1(0.0, 0.0), ZK2(0.0, 0.0);
 
-						EFIE::computeEFIE_Zij(rwgField, rwgSource, wave.k1(), wave.eta1(), gausspoint, ZL1);
-						EFIE::computeEFIE_Zij(rwgField, rwgSource, wave.k2(), wave.eta2(), gausspoint, ZL2);
+						OLK::L_operator(rwgField, rwgSource, wave.k1(), gausspoint, ZL1);
+						OLK::L_operator(rwgField, rwgSource, wave.k2(), gausspoint, ZL2);
 
-						MFIE::computeMFIE_Zij(rwgField, rwgSource, wave.k1(), gausspoint, ZK1);
-						MFIE::computeMFIE_Zij(rwgField, rwgSource, wave.k2(), gausspoint, ZK2);
+						OLK::K_operator(rwgField, rwgSource, wave.k1(), gausspoint, ZK1);
+						OLK::K_operator(rwgField, rwgSource, wave.k2(), gausspoint, ZK2);
 
-						Z_near[rwgfid][count] = ZL1 + ZL2;
+						std::complex<double> z11 = ZL1 + wave.etai() * ZL2;
+						std::complex<double> z12 = -(ZK1 + ZK2);
+						std::complex<double> z21 = ZK1 + ZK2;
+						std::complex<double> z22 = ZL1 + (1.0 / wave.etai()) * ZL2;
+
+						Z_near[rwgfid][count] = z11;
 						Z_near_id[rwgfid][count] = rwgSid;
 						count++;
 
-						Z_near[rwgfid][count] = -ZK1 - ZK2;
+						Z_near[rwgfid][count] = z12;
 						Z_near_id[rwgfid][count] = row + rwgSid;
 						count++;
 
-						Z_near[row + rwgfid][count - 2] = ZK1 + ZK2;
-						Z_near[row + rwgfid][count - 1] = (std::complex<double>(1, 0) / pow(wave.eta1(), 2)) * ZL1 +
-							(std::complex<double>(1, 0) / pow(wave.eta2(), 2)) * ZL2;
+						Z_near[row + rwgfid][count - 2] = z21;
+						Z_near[row + rwgfid][count - 1] = z22;
 
 						Z_near_id[row + rwgfid][count - 2] = rwgSid;
 						Z_near_id[row + rwgfid][count - 1] = row + rwgSid;
