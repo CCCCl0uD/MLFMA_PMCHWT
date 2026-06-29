@@ -502,7 +502,8 @@ namespace EFIE {
 			mul(&pomVec1[0], &rhotmp[0], Isca);
 			add(&pomVec2[0], &Ivec[0], &pomVec1[0]);
 			mul(&Ikon[0], &pomVec2[0], recAs);
-			alok += wF * 2.0 * areaTriF * (J * k_ * eta_ * dot(&RWGf[0], &Ikon[0]) - ((J * eta_) / k_) * (double(1.0 / areaTriF)) * (double(1.0 / areaTriS)) * (Isca));
+			alok += wF * 2.0 * areaTriF * (J * k_ * eta_ * dot(&RWGf[0], &Ikon[0])
+				- ((J * eta_) / k_) * (double(1.0 / areaTriF)) * (double(1.0 / areaTriS)) * (Isca));
 		}
 	}
 }

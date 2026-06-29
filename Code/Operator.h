@@ -10,7 +10,7 @@ namespace OLK {
 	inline void singL(double& areaTriF, double& areaTriS,
 		double* vertexF1, double* vertexF2, double* vertexF3, double* nonPublicEdge_vertexF, const double recAf,
 		double* vertexS1, double* vertexS2, double* vertexS3, double* nonPublicEdge_vertexS, const double recAs, double* normalVectorS,
-		const gaussPoints& gp, const std::complex<double> k_, std::complex<double>& alok)
+		const gaussPoints& gp, const std::complex<double> k_, const std::complex<double> eta_, std::complex<double>& alok)
 	{
 		std::vector<double> fieldPoint(3);
 
@@ -316,6 +316,10 @@ namespace OLK {
 			mul(&pomVec1[0], &rhotmp[0], Isca);
 			add(&pomVec2[0], &Ivec[0], &pomVec1[0]);
 			mul(&Ikon[0], &pomVec2[0], recAs);
+
+			//alok += J * k_ * eta_ * wF * 2.0 * areaTriF * (dot(&RWGf[0], &Ikon[0])
+			//	- (1.0 / (k_ * k_)) * (double(1.0 / (areaTriF * areaTriS))) * (Isca));
+
 			alok += J * k_ * wF * 2.0 * areaTriF * (dot(&RWGf[0], &Ikon[0])
 				- (1.0 / (k_ * k_)) * (double(1.0 / (areaTriF * areaTriS))) * (Isca));
 		}
@@ -706,6 +710,7 @@ namespace OLK {
 	}
 
 	inline void L_operator(const RWGBase* rwgField, const RWGBase* rwgSource, const std::complex<double> k_,
+		const std::complex<double> eta_,
 		const gaussPoints& gp, std::complex<double>& Zij_near_E) {
 		int rwgFieldTriId, rwgSourceTriId;
 		double areaTriF, areaTriS;
@@ -813,6 +818,10 @@ namespace OLK {
 							// 计算该源面元下的RWG基函数值
 							mul(&RWGs[0], &pomocvS[0], constRWGSource);
 
+							//alok1 += J * k_ * eta_ * wF * wS * 4.0 * areaTriF * areaTriS *
+							//	(G * dot(&RWGf[0], &RWGs[0]) -
+							//		(1.0 / (k_ * k_)) * G * (1.0 / (areaTriF * areaTriS)));
+
 							alok1 += J * k_ * wF * wS * 4.0 * areaTriF * areaTriS *
 								(G * dot(&RWGf[0], &RWGs[0]) -
 									(1.0 / (k_ * k_)) * G * (1.0 / (areaTriF * areaTriS)));
@@ -860,6 +869,10 @@ namespace OLK {
 							// 计算该源面元下的RWG基函数值
 							mul(&RWGs[0], &pomocvS[0], constRWGSource);
 
+							//alok1 += J * k_ * eta_ * wF * wS * 4.0 * areaTriF * areaTriS *
+							//	(G_Sing * dot(&RWGf[0], &RWGs[0]) -
+							//		(1.0 / (k_ * k_)) * G_Sing * (1.0 / (areaTriF * areaTriS)));
+
 							alok1 += J * k_ * wF * wS * 4.0 * areaTriF * areaTriS *
 								(G_Sing * dot(&RWGf[0], &RWGs[0]) -
 									(1.0 / (k_ * k_)) * G_Sing * (1.0 / (areaTriF * areaTriS)));
@@ -868,7 +881,7 @@ namespace OLK {
 					singL(areaTriF, areaTriS,
 						vertexF1, vertexF2, vertexF3, nonPublicEdge_vertexF, constRWGField,
 						vertexS1, vertexS2, vertexS3, nonPublicEdge_vertexS, constRWGSource, normalVectorS,
-						gp, k_, alok);
+						gp, k_, eta_, alok);
 					alok1 += alok;
 				}
 				// 三元运算符，如果是正三角形，则为1，否则为-1

@@ -508,16 +508,16 @@ namespace Zmartix {
 				std::complex<double> ZL1(0.0, 0.0), ZL2(0.0, 0.0);
 				std::complex<double> ZK1(0.0, 0.0), ZK2(0.0, 0.0);
 
-				OLK::L_operator(rwgField, rwgSource, wave.k1(), gausspoint, ZL1);
-				OLK::L_operator(rwgField, rwgSource, wave.k2(), gausspoint, ZL2);
+				OLK::L_operator(rwgField, rwgSource, wave.k1(), wave.eta1(), gausspoint, ZL1);
+				OLK::L_operator(rwgField, rwgSource, wave.k2(), wave.eta2(), gausspoint, ZL2);
 
 				OLK::K_operator(rwgField, rwgSource, wave.k1(), gausspoint, ZK1);
 				OLK::K_operator(rwgField, rwgSource, wave.k2(), gausspoint, ZK2);
 
-				std::complex<double> z11 = wave.eta1() * ZL1 - wave.eta2() * ZL2;
-				std::complex<double> z12 = ZK1 - ZK2;
-				std::complex<double> z21 = -ZK1 + ZK2;
-				std::complex<double> z22 = (1.0 / wave.eta1()) * ZL1 - (1.0 / wave.eta2()) * ZL2;
+				std::complex<double> z11 = ZL1 + wave.etai() * ZL2;
+				std::complex<double> z12 = -(ZK1 + ZK2);
+				std::complex<double> z21 = ZK1 + ZK2;
+				std::complex<double> z22 = ZL1 + (1.0 / wave.etai()) * ZL2;
 
 				Z_mom[i][j] = z11;
 				Z_mom[i][N + j] = z12;
