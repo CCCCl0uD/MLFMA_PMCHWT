@@ -183,12 +183,11 @@ namespace RCSUtils {
 				F_M[2] += ln * wf * rCrossRho[2] * e_k1;
 			}
 
-			std::complex<double> coeff_J = -J * k1 * eta1;
-			std::complex<double> coeff_M = J * k1;
+			std::complex<double> coeff = -J * k1;
 
-			RCS_pre[0] += coeff_J * F_J[0] * I_J[rwgid] + coeff_M * F_M[0] * I_M[rwgid];
-			RCS_pre[1] += coeff_J * F_J[1] * I_J[rwgid] + coeff_M * F_M[1] * I_M[rwgid];
-			RCS_pre[2] += coeff_J * F_J[2] * I_J[rwgid] + coeff_M * F_M[2] * I_M[rwgid];
+			RCS_pre[0] += -coeff * F_J[0] * I_J[rwgid] + coeff * F_M[0] * I_M[rwgid];
+			RCS_pre[1] += -coeff * F_J[1] * I_J[rwgid] + coeff * F_M[1] * I_M[rwgid];
+			RCS_pre[2] += -coeff * F_J[2] * I_J[rwgid] + coeff * F_M[2] * I_M[rwgid];
 		}
 	}
 

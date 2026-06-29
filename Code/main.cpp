@@ -80,9 +80,9 @@ int main(int argc, char* argv[]) {
 	// ------- Single -------
 	std::vector<Point> points;
 	std::vector<FaceElement> faces;
-	const std::string inputFile = "D:\\MyCode\\PMCHWT_MLFMA\\DATA\\Sphere_Die_1e9\\Sphere_Die_1e9.nas";
+	const std::string inputFile = "D:\\MyCode\\PMCHWT_MLFMA\\DATA\\Sphere_Die_8e8\\Sphere_8e8.nas";
 	/************************************************************************/
-	double freq = 1.0e9, E0 = 1.0;
+	double freq = 8.0e8, E0 = 1.0;
 	double inc_th = 90.0, inc_ph = 0.0;
 	double sca_th_s = 90.0, sca_th_f = 90.0;
 	double sca_ph_s = 0.0, sca_ph_f = 360.0;
@@ -94,7 +94,7 @@ int main(int argc, char* argv[]) {
 	int selectAlgorithm = 0;// 0==>MoM;1==>FMM;2==>MLFMM
 	int selectIntegralEqu = 2;// 0==>EFIE;1==>CFIE;2==>PMCHWT
 	int selectMatrixSolver = 1;// 0==>GMRES;1==>CGS
-	std::complex<double> epsilonR(4.0, 0.001);
+	std::complex<double> epsilonR(4.0, -0.001);
 	std::complex<double> muR(1.0, 0.0);
 	/************************************************************************/
 	omp_set_dynamic(0);
