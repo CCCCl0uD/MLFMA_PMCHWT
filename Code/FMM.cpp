@@ -81,7 +81,7 @@ FMM::FMM(const RCSExportConfig& cfg, const int selectIntegralEqu, const int sele
 			octreeNodes_[maxLevel_], kp_lvl_k2[0], wave.k2(), wave.eta2(),
 			row, gausspoint, alpha, 1);
 
-		// PMCHWT: Z_near 2N×2N
+		// PMCHWT: Z_near
 		Zmartix::computeZ_fmm_die_pmchwt(octreeNodes_[maxLevel_], rwgs,
 			Z_near, Z_near_id, row, wave, gausspoint, 1);
 
@@ -198,217 +198,201 @@ void FMM::matrix_solver(int n, std::complex<double> x[], std::complex<double> rh
 			}
 		}
 		else {
-			// ===== PMCHW: 8 次子运算 =====
+			// ===== PMCHWT matrix-vector product =====
+			// Unknown ordering:
+			//   x[0:N)     = J coefficients
+			//   x[N:2*N)   = M coefficients
+			//
+			// Equation ordering:
+			//   w[0:N)     = electric-current testing block
+			//   w[N:2*N)   = magnetic-current testing block
+
 			const int N = row;
+			if (n != 2 * N) {
+				throw std::invalid_argument("FMM PMCHWT matrix_solver requires n == 2 * row.");
+			}
+
+			const int K1 = static_cast<int>(kp_lvl_k1[0].size());
 			const int K2 = static_cast<int>(kp_lvl_k2[0].size());
+
 			const int tN1 = static_cast<int>(theta_level_k1[0].size());
 			const int pN1 = static_cast<int>(phi_level_k1[0].size());
 			const int tN2 = static_cast<int>(theta_level_k2[0].size());
 			const int pN2 = static_cast<int>(phi_level_k2[0].size());
+
+			// const参数存疑
 			const std::complex<double> const1 = wave.k1() * wave.k1() * wave.eta1() / (16.0 * Pi * Pi);
 			const std::complex<double> const2 = wave.k2() * wave.k2() / (16.0 * Pi * Pi);
 
-			std::vector<std::vector<Complex3D>> Sm_J(nodenum, std::vector<Complex3D>(K1, Complex3D()));
-			std::vector<std::vector<Complex3D>> Bm_J(nodenum, std::vector<Complex3D>(K1, Complex3D()));
-			std::vector<std::vector<Complex3D>> Sm_M(nodenum, std::vector<Complex3D>(K2, Complex3D()));
-			std::vector<std::vector<Complex3D>> Bm_M(nodenum, std::vector<Complex3D>(K2, Complex3D()));
-
-			// ---- 区域1: Mexp(J) + ML(J) + Mexp(M) + ML(M) ----
+			auto aggregate = [&](const std::vector<std::vector<Complex3D>>& Vsm,
+				int xOffset, int K, std::vector<std::vector<Complex3D>>& Sm) {
 #pragma omp parallel for schedule(dynamic)
-			for (int nodeN = 0; nodeN < nodenum; ++nodeN) {
-				OCTree::Node* nd = octreeNodes_[maxLevel_][nodeN];
+					for (int nodeIdx = 0; nodeIdx < nodenum; ++nodeIdx) {
+						OCTree::Node* node = octreeNodes_[maxLevel_][nodeIdx];
+						const int rwgNum = static_cast<int>(node->rwgIndices.size());
 
-				for (int rwg_i = 0; rwg_i < nd->rwgIndices.size(); ++rwg_i) {
-					int id = nd->rwgIndices[rwg_i]->rwgid;
+						for (int r = 0; r < rwgNum; ++r) {
+							const int rwgid = node->rwgIndices[r]->rwgid;
+							const std::complex<double> coeff = x[xOffset + rwgid];
 
-					for (int kpi = 0; kpi < K1; ++kpi) {
-						Sm_J[nodeN][kpi].x += Vsmi[id][kpi].x * x[id];       // x[0..N-1]=I_J
-						Sm_J[nodeN][kpi].y += Vsmi[id][kpi].y * x[id];
-						Sm_J[nodeN][kpi].z += Vsmi[id][kpi].z * x[id];
-						Sm_M[nodeN][kpi].x += Vsmi[id][kpi].x * x[N + id];  // x[N..2N-1]=I_M
-						Sm_M[nodeN][kpi].y += Vsmi[id][kpi].y * x[N + id];
-						Sm_M[nodeN][kpi].z += Vsmi[id][kpi].z * x[N + id];
+							for (int kpi = 0; kpi < K; ++kpi) {
+								Sm[nodeIdx][kpi].x += Vsm[rwgid][kpi].x * coeff;
+								Sm[nodeIdx][kpi].y += Vsm[rwgid][kpi].y * coeff;
+								Sm[nodeIdx][kpi].z += Vsm[rwgid][kpi].z * coeff;
+							}
+						}
+					}
+				};
+
+			auto translate = [&](const std::vector<std::vector<std::complex<double>>>& TF_all,
+				int K, const std::vector<std::vector<Complex3D>>& Sm,
+				std::vector<std::vector<Complex3D>>& Bm) {
+#pragma omp parallel for schedule(dynamic)
+					for (int nodeIdx = 0; nodeIdx < nodenum; ++nodeIdx) {
+						const int farnum = static_cast<int>(node_far[nodeIdx].size());
+
+						for (int f = 0; f < farnum; ++f) {
+							const int farId = node_far_id[nodeIdx][f];
+							const auto& TF = TF_all[node_farVec_id[nodeIdx][f]];
+
+							for (int kpi = 0; kpi < K; ++kpi) {
+								Bm[nodeIdx][kpi].x += TF[kpi] * Sm[farId][kpi].x;
+								Bm[nodeIdx][kpi].y += TF[kpi] * Sm[farId][kpi].y;
+								Bm[nodeIdx][kpi].z += TF[kpi] * Sm[farId][kpi].z;
+							}
+						}
+					}
+				};
+
+			auto integrateL = [](const std::vector<Complex3D>& V,
+				const std::vector<Complex3D>& B, const std::vector<double>& WGL,
+				double WGL_phi, int tN, int pN) -> std::complex<double> {
+					std::complex<double> val(0.0, 0.0);
+					for (int ti = 0; ti < tN; ++ti) {
+						for (int pj = 0; pj < pN; ++pj) {
+							const int idx = ti * pN + pj;
+							const double d2k = WGL[ti] * WGL_phi;
+							val += d2k * dot(V[idx], B[idx]);
+						}
+					}
+					return val;
+				};
+
+			auto integrateK = [](const std::vector<Complex3D>& V,
+				const std::vector<Complex3D>& B, const std::vector<kp_Point>& kp,
+				const std::vector<double>& WGL, double WGL_phi, int tN, int pN) -> std::complex<double> {
+					std::complex<double> val(0.0, 0.0);
+					for (int ti = 0; ti < tN; ++ti) {
+						for (int pj = 0; pj < pN; ++pj) {
+							const int idx = ti * pN + pj;
+							const double d2k = WGL[ti] * WGL_phi;
+
+							const double khat[3] = { kp[idx].x, kp[idx].y, kp[idx].z };
+
+							Complex3D kCrossV;
+							cross(kCrossV, khat, V[idx]);
+							val += d2k * dot(kCrossV, B[idx]);
+						}
+					}
+					return val;
+				};
+
+			// ---------- k1 external space ----------
+			{
+				std::vector<std::vector<Complex3D>> Sm_J1(
+					nodenum, std::vector<Complex3D>(K1, Complex3D()));
+				std::vector<std::vector<Complex3D>> Bm_J1(
+					nodenum, std::vector<Complex3D>(K1, Complex3D()));
+				std::vector<std::vector<Complex3D>> Sm_M1(
+					nodenum, std::vector<Complex3D>(K1, Complex3D()));
+				std::vector<std::vector<Complex3D>> Bm_M1(
+					nodenum, std::vector<Complex3D>(K1, Complex3D()));
+
+				aggregate(Vsmi, 0, K1, Sm_J1);
+				aggregate(Vsmi, N, K1, Sm_M1);
+
+				translate(TF_fmm, K1, Sm_J1, Bm_J1);
+				translate(TF_fmm, K1, Sm_M1, Bm_M1);
+
+#pragma omp parallel for schedule(dynamic)
+				for (int nodeIdx = 0; nodeIdx < nodenum; ++nodeIdx) {
+					OCTree::Node* node = octreeNodes_[maxLevel_][nodeIdx];
+					const int rwgNum = static_cast<int>(node->rwgIndices.size());
+
+					for (int r = 0; r < rwgNum; ++r) {
+						const int rwgid = node->rwgIndices[r]->rwgid;
+						const auto& V1 = Vfmj[rwgid];
+
+						const auto L1J = integrateL(
+							V1, Bm_J1[nodeIdx], WGL_k1[0], WGL_phi_k1[0], tN1, pN1);
+						const auto K1J = integrateK(
+							V1, Bm_J1[nodeIdx], kp_lvl_k1[0], WGL_k1[0], WGL_phi_k1[0], tN1, pN1);
+						const auto K1M = integrateK(
+							V1, Bm_M1[nodeIdx], kp_lvl_k1[0], WGL_k1[0], WGL_phi_k1[0], tN1, pN1);
+						const auto L1M = integrateL(
+							V1, Bm_M1[nodeIdx], WGL_k1[0], WGL_phi_k1[0], tN1, pN1);
+
+						w[rwgid] += const1 * L1J;
+						w[N + rwgid] -= const1 * K1J;
+						w[rwgid] += const1 * K1M;
+						w[N + rwgid] += const1 * L1M;
 					}
 				}
 			}
 
-#pragma omp parallel for schedule(dynamic)
-			for (int nodeN = 0; nodeN < nodenum; ++nodeN) {
-				for (int farn = 0; farn < static_cast<int>(node_far[nodeN].size()); ++farn) {
-					int farId = node_far_id[nodeN][farn];
-					const auto& TF = TF_fmm[node_farVec_id[nodeN][farn]];
+			// ---------- k2 internal space ----------
+			{
+				std::vector<std::vector<Complex3D>> Sm_J2(
+					nodenum, std::vector<Complex3D>(K2, Complex3D()));
+				std::vector<std::vector<Complex3D>> Bm_J2(
+					nodenum, std::vector<Complex3D>(K2, Complex3D()));
+				std::vector<std::vector<Complex3D>> Sm_M2(
+					nodenum, std::vector<Complex3D>(K2, Complex3D()));
+				std::vector<std::vector<Complex3D>> Bm_M2(
+					nodenum, std::vector<Complex3D>(K2, Complex3D()));
 
-					for (int kpi = 0; kpi < K1; ++kpi) {
-						Bm_J[nodeN][kpi].x += TF[kpi] * Sm_J[farId][kpi].x;
-						Bm_J[nodeN][kpi].y += TF[kpi] * Sm_J[farId][kpi].y;
-						Bm_J[nodeN][kpi].z += TF[kpi] * Sm_J[farId][kpi].z;
-						Bm_M[nodeN][kpi].x += TF[kpi] * Sm_M[farId][kpi].x;
-						Bm_M[nodeN][kpi].y += TF[kpi] * Sm_M[farId][kpi].y;
-						Bm_M[nodeN][kpi].z += TF[kpi] * Sm_M[farId][kpi].z;
+				aggregate(Vsmi2, 0, K2, Sm_J2);
+				aggregate(Vsmi2, N, K2, Sm_M2);
+
+				translate(TF_fmm2, K2, Sm_J2, Bm_J2);
+				translate(TF_fmm2, K2, Sm_M2, Bm_M2);
+
+#pragma omp parallel for schedule(dynamic)
+				for (int nodeIdx = 0; nodeIdx < nodenum; ++nodeIdx) {
+					OCTree::Node* node = octreeNodes_[maxLevel_][nodeIdx];
+					const int rwgNum = static_cast<int>(node->rwgIndices.size());
+
+					for (int r = 0; r < rwgNum; ++r) {
+						const int rwgid = node->rwgIndices[r]->rwgid;
+						const auto& V2 = Vfmj2[rwgid];
+
+						const auto L2J = integrateL(
+							V2, Bm_J2[nodeIdx], WGL_k2[0], WGL_phi_k2[0], tN2, pN2);
+						const auto K2J = integrateK(
+							V2, Bm_J2[nodeIdx], kp_lvl_k2[0], WGL_k2[0], WGL_phi_k2[0], tN2, pN2);
+						const auto K2M = integrateK(
+							V2, Bm_M2[nodeIdx], kp_lvl_k2[0], WGL_k2[0], WGL_phi_k2[0], tN2, pN2);
+						const auto L2M = integrateL(
+							V2, Bm_M2[nodeIdx], WGL_k2[0], WGL_phi_k2[0], tN2, pN2);
+
+						w[rwgid] += const2 * wave.eta2() * L2J;
+						w[N + rwgid] -= const2 * wave.eta1() * K2J;
+						w[rwgid] += const2 * wave.eta1() * K2M;
+						w[N + rwgid] += const2 * wave.eta2() * wave.epsilonR() * L2M;
 					}
 				}
 			}
 
-			// ---- 区域1: Lexp (4 个子运算) + 区域2: Mexp/ML/Lexp ----
-			// 为区域2初始化临时数组
-			std::vector<std::vector<Complex3D>> Sm_J2(nodenum, std::vector<Complex3D>(K1, Complex3D()));
-			std::vector<std::vector<Complex3D>> Bm_J2(nodenum, std::vector<Complex3D>(K1, Complex3D()));
-			std::vector<std::vector<Complex3D>> Sm_M2(nodenum, std::vector<Complex3D>(K1, Complex3D()));
-			std::vector<std::vector<Complex3D>> Bm_M2(nodenum, std::vector<Complex3D>(K1, Complex3D()));
-
-			// Lexp1 (区域1 Lexp 需用 Bm_J 和 Bm_M):
-			// 先完成解聚① L1(J), ② K1(J), ③ K1(M), ④ L1(M)
-			// 同时做区域2的 Mexp(J), Mexp(M)
-#pragma omp parallel for schedule(dynamic)
-			for (int nodeN = 0; nodeN < nodenum; ++nodeN) {
-				OCTree::Node* nd = octreeNodes_[maxLevel_][nodeN];
-				for (int r = 0; r < static_cast<int>(nd->rwgIndices.size()); ++r) {
-					int rwgid = nd->rwgIndices[r]->rwgid;
-
-					// 区域2 Mexp(J)
-					for (int kpi = 0; kpi < K2; ++kpi) {
-						Sm_J2[nodeN][kpi].x += Vsmi2[rwgid][kpi].x * x[rwgid];
-						Sm_J2[nodeN][kpi].y += Vsmi2[rwgid][kpi].y * x[rwgid];
-						Sm_J2[nodeN][kpi].z += Vsmi2[rwgid][kpi].z * x[rwgid];
-						Sm_M2[nodeN][kpi].x += Vsmi2[rwgid][kpi].x * x[N + rwgid];
-						Sm_M2[nodeN][kpi].y += Vsmi2[rwgid][kpi].y * x[N + rwgid];
-						Sm_M2[nodeN][kpi].z += Vsmi2[rwgid][kpi].z * x[N + rwgid];
-					}
-
-					// ---- ① L1(J): EFIE on J → w[0:N-1] ----
-					std::complex<double> valL1J(0.0, 0.0);
-					const auto& V1 = Vfmj[rwgid];
-					for (int ti = 0; ti < theta_level_k1[0].size(); ++ti) {
-						for (int pj = 0; pj < pN1; ++pj) {
-							int idx = ti * pN1 + pj;
-							double d2k = WGL_k1[0][ti] * WGL_phi_k1[0];
-							valL1J += d2k * dot(V1[idx], Bm_J[nodeN][idx]);
-						}
-					}
-					w[rwgid] += const1 * valL1J;
-
-					// ---- ② K1(J): K on J → w[N:2N-1]（负号）----
-					// Vfmj_K = k̂ × Vfmj（在 xyz 中直接用叉乘）
-					std::complex<double> valK1J(0.0, 0.0);
-					for (int ti = 0; ti < tN1; ++ti) {
-						for (int pj = 0; pj < pN1; ++pj) {
-							int idx = ti * pN1 + pj;
-							double d2k = WGL_k1[0][ti] * WGL_phi_k1[0];
-							double kp[3] = { kp_lvl_k1[0][idx].x, kp_lvl_k1[0][idx].y, kp_lvl_k1[0][idx].z };
-							Complex3D kCrossVfmj;
-							cross(kCrossVfmj, kp, V1[idx]);
-							valK1J += d2k * dot(kCrossVfmj, Bm_J[nodeN][idx]);
-						}
-					}
-					w[N + rwgid] -= const1 * valK1J;
-
-					// ---- ③ K1(M): K on M → w[0:N-1] ----
-					std::complex<double> valK1M(0.0, 0.0);
-					for (int ti = 0; ti < tN1; ++ti) {
-						for (int pj = 0; pj < pN1; ++pj) {
-							int idx = ti * pN1 + pj;
-							double d2k = WGL_k1[0][ti] * WGL_phi_k1[0];
-							double kp[3] = { kp_lvl_k1[0][idx].x, kp_lvl_k1[0][idx].y, kp_lvl_k1[0][idx].z };
-							Complex3D kCrossVfmj;
-							cross(kCrossVfmj, kp, Vfmj[rwgid][idx]);
-							valK1M += d2k * dot(kCrossVfmj, Bm_M[nodeN][idx]);
-						}
-					}
-					w[rwgid] += const1 * valK1M;
-
-					// ---- ④ L1(M): EFIE on M → w[N:2N-1] ----
-					std::complex<double> valL1M(0.0, 0.0);
-					for (int ti = 0; ti < tN1; ++ti) {
-						for (int pj = 0; pj < pN1; ++pj) {
-							int idx = ti * pN1 + pj;
-							double d2k = WGL_k1[0][ti] * WGL_phi_k1[0];
-							valL1M += d2k * dot(Vfmj[rwgid][idx], Bm_M[nodeN][idx]);
-						}
-					}
-					w[N + rwgid] += const1 * valL1M;
-				}
-			}
-
-			// ---- 区域2: ML(J) 和 ML(M) ----
-#pragma omp parallel for schedule(dynamic)
-			for (int nodeN = 0; nodeN < nodenum; ++nodeN) {
-				for (int farn = 0; farn < node_far[nodeN].size(); ++farn) {
-					int farId = node_far_id[nodeN][farn];
-					const auto& TF2 = TF_fmm2[node_farVec_id[nodeN][farn]];
-					for (int kpi = 0; kpi < K2; ++kpi) {
-						Bm_J2[nodeN][kpi].x += TF2[kpi] * Sm_J2[farId][kpi].x;
-						Bm_J2[nodeN][kpi].y += TF2[kpi] * Sm_J2[farId][kpi].y;
-						Bm_J2[nodeN][kpi].z += TF2[kpi] * Sm_J2[farId][kpi].z;
-						Bm_M2[nodeN][kpi].x += TF2[kpi] * Sm_M2[farId][kpi].x;
-						Bm_M2[nodeN][kpi].y += TF2[kpi] * Sm_M2[farId][kpi].y;
-						Bm_M2[nodeN][kpi].z += TF2[kpi] * Sm_M2[farId][kpi].z;
-					}
-				}
-			}
-
-			// ---- 区域2: Lexp (⑤~⑧) + 近场 ----
 #pragma omp parallel for schedule(dynamic)
 			for (int nodeIdx = 0; nodeIdx < nodenum; ++nodeIdx) {
 				OCTree::Node* nd = octreeNodes_[maxLevel_][nodeIdx];
-				for (int r = 0; r < nd->rwgIndices.size(); ++r) {
+				for (int r = 0; r < static_cast<int>(nd->rwgIndices.size()); ++r) {
 					int rwgid = nd->rwgIndices[r]->rwgid;
-					const auto& V2 = Vfmj2[rwgid];
-					// ⑤ L2(J): const2 * eta2 * L2(J) → w[0:N-1]
-					std::complex<double> vL2J(0.0, 0.0);
-					for (int ti = 0; ti < tN2; ++ti) {
-						for (int pj = 0; pj < pN2; ++pj) {
-							int idx = ti * pN2 + pj;
-							double d2k = WGL_k2[0][ti] * WGL_phi_k2[0];
-							vL2J += d2k * dot(V2[idx], Bm_J2[nodeIdx][idx]);
-						}
-					}
-					w[rwgid] += const2 * wave.eta2() * vL2J;
 
-					// ⑥ K2(J): -const2 * eta1 * K2(J) → w[N:2N-1]
-					std::complex<double> vK2J(0.0, 0.0);
-					for (int ti = 0; ti < tN2; ++ti) {
-						for (int pj = 0; pj < pN2; ++pj) {
-							int idx = ti * pN2 + pj;
-							double d2k = WGL_k2[0][ti] * WGL_phi_k2[0];
-							double kp[3] = { kp_lvl_k2[0][idx].x, kp_lvl_k2[0][idx].y, kp_lvl_k2[0][idx].z };
-							Complex3D kcv;
-							cross(kcv, kp, Vfmj2[rwgid][idx]);
-							vK2J += d2k * dot(kcv, Bm_J2[nodeIdx][idx]);
-						}
-					}
-					w[N + rwgid] -= const2 * wave.eta1() * vK2J;
-
-					// ⑦ K2(M): const2 * eta1 * K2(M) → w[0:N-1]
-					std::complex<double> vK2M(0.0, 0.0);
-					for (int ti = 0; ti < tN2; ++ti) {
-						for (int pj = 0; pj < pN2; ++pj) {
-							int idx = ti * pN2 + pj;
-							double d2k = WGL_k2[0][ti] * WGL_phi_k2[0];
-							double kp[3] = { kp_lvl_k2[0][idx].x, kp_lvl_k2[0][idx].y, kp_lvl_k2[0][idx].z };
-							Complex3D kcv;
-							cross(kcv, kp, Vfmj2[rwgid][idx]);
-							vK2M += d2k * dot(kcv, Bm_M2[nodeIdx][idx]);
-						}
-					}
-					w[rwgid] += const2 * wave.eta1() * vK2M;
-
-					// ⑧ L2(M): const2 * eta2 * εr * L2(M) → w[N:2N-1]
-					std::complex<double> vL2M(0.0, 0.0);
-					for (int ti = 0; ti < tN2; ++ti) {
-						for (int pj = 0; pj < pN2; ++pj) {
-							int idx = ti * pN2 + pj;
-							double d2k = WGL_k2[0][ti] * WGL_phi_k2[0];
-							vL2M += d2k * dot(Vfmj2[rwgid][idx], Bm_M2[nodeIdx][idx]);
-						}
-					}
-					w[N + rwgid] += const2 * wave.eta2() * wave.epsilonR() * vL2M;
-
-					// ---- 近场: 2N×2N 稀疏矩阵 × x ----
-					// J 测试行
 					for (int j = 0; j < static_cast<int>(Z_near[rwgid].size()); ++j) {
 						w[rwgid] += x[Z_near_id[rwgid][j]] * Z_near[rwgid][j];
 					}
-					// M 测试行
+
 					for (int j = 0; j < static_cast<int>(Z_near[N + rwgid].size()); ++j) {
 						w[N + rwgid] += x[Z_near_id[N + rwgid][j]] * Z_near[N + rwgid][j];
 					}
