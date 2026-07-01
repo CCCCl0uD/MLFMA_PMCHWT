@@ -149,7 +149,7 @@ namespace RHS {
 
 	inline void computeV_PMCHWT(
 		const std::vector<RWGBase>& rwgs, const gaussPoints& gp,
-		const std::complex<double> k1, const std::complex<double> eta0_,
+		const std::complex<double> k1,
 		double kInc[3], double eInc[3], double hInc[3],
 		std::vector<std::complex<double>>& Vm)
 	{

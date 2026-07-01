@@ -72,7 +72,7 @@ public:
 
 	size_t computeMem();
 	void matrix_solver(int n, std::complex<double> x[], std::complex<double> rhs[], int itr_max, int mr, double tol_abs, double tol_rel);
-
+	void fmm_fullZmn_Die_Pmchwt();
 private:
 
 	void fmm_Dual_Pec_Efie(const RCSExportConfig& cfg, const std::string pol_wave);

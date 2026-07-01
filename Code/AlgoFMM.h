@@ -55,20 +55,25 @@ namespace AlgoFMM {
 	}
 
 	// FMM远场数据处理
-	inline void computeFMM_far(const std::vector<OCTree::Node*>& nodes, std::vector<OCTree::nodePoint>& farVec,
-		std::vector<std::vector<OCTree::Node*>>& node_far, std::vector<std::vector<int>>& node_far_id,
-		std::vector<std::vector<int>>& node_farVec_id, std::vector<std::vector<std::complex<double>>>& TF_fmm,
-		std::vector<std::vector<kp_Point>>& kp_lvl, const std::complex<double> k_, const int L) {
-		auto t_start = std::chrono::high_resolution_clock::now();
-
-		// 寻找非附近组
+	inline void computeFMMFarGroups(
+		const std::vector<OCTree::Node*>& nodes,
+		std::vector<OCTree::nodePoint>& farVec,
+		std::vector<std::vector<OCTree::Node*>>& node_far,
+		std::vector<std::vector<int>>& node_far_id,
+		std::vector<std::vector<int>>& node_farVec_id)
+	{
 		farVec.clear();
 
-		const int num = nodes.size();
-
+		const int num = static_cast<int>(nodes.size());
 		node_far.resize(num);
 		node_far_id.resize(num);
 		node_farVec_id.resize(num);
+
+		for (int i = 0; i < num; ++i) {
+			node_far[i].clear();
+			node_far_id[i].clear();
+			node_farVec_id[i].clear();
+		}
 
 		for (int i = 0; i < num; ++i) {
 			OCTree::Node* node1 = nodes[i];
@@ -87,12 +92,13 @@ namespace AlgoFMM {
 			}
 		}
 
-		for (int idx1 = 0; idx1 < nodes.size(); ++idx1) {
+		for (int idx1 = 0; idx1 < num; ++idx1) {
 			OCTree::Node* node = nodes[idx1];
-			if (node->distantRelatives.empty())continue;
-			node_farVec_id[idx1].clear();
+			if (node_far[idx1].empty()) {
+				continue;
+			}
 
-			for (int idx2 = 0; idx2 < node_far[idx1].size(); ++idx2) {
+			for (int idx2 = 0; idx2 < static_cast<int>(node_far[idx1].size()); ++idx2) {
 				OCTree::Node* far = node_far[idx1][idx2];
 
 				OCTree::nodePoint vecToDR = {
@@ -102,7 +108,7 @@ namespace AlgoFMM {
 				};
 
 				int vecIdx = -1;
-				for (int l = 0; l < farVec.size(); ++l) {
+				for (int l = 0; l < static_cast<int>(farVec.size()); ++l) {
 					if (OCTree::isVecEqual(vecToDR, farVec[l])) {
 						vecIdx = l;
 						break;
@@ -110,13 +116,24 @@ namespace AlgoFMM {
 				}
 
 				if (vecIdx == -1) {
-					vecIdx = farVec.size();
+					vecIdx = static_cast<int>(farVec.size());
 					farVec.push_back(vecToDR);
 				}
 
 				node_farVec_id[idx1].push_back(vecIdx);
 			}
 		}
+	}
+
+	inline void computeFMM_far(std::vector<OCTree::nodePoint>& farVec,
+		std::vector<std::vector<OCTree::Node*>>& node_far,
+		std::vector<std::vector<int>>& node_far_id,
+		std::vector<std::vector<int>>& node_farVec_id,
+		std::vector<std::vector<std::complex<double>>>& TF_fmm,
+		std::vector<std::vector<kp_Point>>& kp_lvl,
+		const std::complex<double> k_, const int L)
+	{
+		auto t_start = std::chrono::high_resolution_clock::now();
 
 		// 初始化转移因子矩阵
 		TF_fmm.resize(farVec.size());
