@@ -45,7 +45,7 @@ MoM::MoM(
 	if (integralEquType_ == 2) {
 		Zmartix::computeZ_die_pmchwt(rwgs, row, wave, gausspoint, Z_mom);
 
-		//exportZ(cfg);
+		exportZ(cfg);
 
 		if (selectMono_Dual == "dual") {
 			mom_Dual_Die_Pmchwt(cfg, pol_wave);
@@ -64,17 +64,18 @@ void MoM::exportZ(const RCSExportConfig& cfg) {
 		return;
 	}
 
-	zFile << "Z_mom Matrix\n";
+	zFile << std::setprecision(17);
+	zFile << "row\tcol\treal\timag\n";
 
-	for (int i = 0; i < row; i++)
-	{
-		for (int j = 0; j < Z_mom[i].size(); j++)
-		{
-			zFile << i << "\t" << j << "\t" << Z_mom[i][j] << "\n";
+	for (int i = 0; i < static_cast<int>(Z_mom.size()); ++i) {
+		for (int j = 0; j < static_cast<int>(Z_mom[i].size()); ++j) {
+			zFile << i << '\t'
+				<< j << '\t'
+				<< Z_mom[i][j].real() << '\t'
+				<< Z_mom[i][j].imag() << '\n';
 		}
-
-		zFile << "\n";
 	}
+
 	zFile.close();
 	std::cout << "Z matrix export completed." << std::endl;
 }
@@ -165,7 +166,7 @@ void MoM::mom_Dual_Die_Pmchwt(const RCSExportConfig& cfg, const std::string pol_
 {
 	auto computeV = [](MoM& solver, double kInc[3], double eInc[3], double hInc[3]) {
 		RHS::computeV_PMCHWT(solver.rwgs, solver.gausspoint,
-			solver.wave.k1(), solver.wave.eta1(), kInc, eInc, hInc, solver.Vm);
+			solver.wave.k1(), kInc, eInc, hInc, solver.Vm);
 		};
 	RCSUtils::computeDualStatic_PMCHWT(*this, cfg, computeV);
 }
@@ -174,7 +175,7 @@ void MoM::mom_Mono_Die_Pmchwt(const RCSExportConfig& cfg, const std::string pol_
 {
 	auto computeV = [](MoM& solver, double kInc[3], double eInc[3], double hInc[3]) {
 		RHS::computeV_PMCHWT(solver.rwgs, solver.gausspoint,
-			solver.wave.k1(), solver.wave.eta1(), kInc, eInc, hInc, solver.Vm);
+			solver.wave.k1(), kInc, eInc, hInc, solver.Vm);
 		};
 	RCSUtils::computeMonoStatic_PMCHWT(*this, cfg, computeV);
 }

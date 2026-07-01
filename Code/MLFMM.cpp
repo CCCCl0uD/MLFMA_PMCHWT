@@ -302,7 +302,7 @@ void MLFMM::mlfmm_Mono_Pec_Cfie(const RCSExportConfig& cfg, const std::string po
 void MLFMM::mlfmm_Dual_Die_Pmchwt(const RCSExportConfig& cfg, const std::string pol_wave) {
 	auto computeV = [](MLFMM& solver, double kInc[3], double eInc[3], double hInc[3]) {
 		RHS::computeV_PMCHWT(solver.rwgs, solver.gausspoint,
-			solver.wave.k1(), solver.wave.k2(), kInc, eInc, hInc, solver.Vm);
+			solver.wave.k1(), kInc, eInc, hInc, solver.Vm);
 		};
 	RCSUtils::computeDualStatic_PMCHWT(*this, cfg, computeV);
 }
@@ -311,7 +311,7 @@ void MLFMM::mlfmm_Mono_Die_Pmchwt(const RCSExportConfig& cfg, const std::string 
 {
 	auto computeV = [](MLFMM& solver, double kInc[3], double eInc[3], double hInc[3]) {
 		RHS::computeV_PMCHWT(solver.rwgs, solver.gausspoint,
-			solver.wave.k1(), solver.wave.k2(), kInc, eInc, hInc, solver.Vm);
+			solver.wave.k1(), kInc, eInc, hInc, solver.Vm);
 		};
 	RCSUtils::computeMonoStatic_PMCHWT(*this, cfg, computeV);
 }

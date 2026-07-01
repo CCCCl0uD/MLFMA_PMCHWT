@@ -17,8 +17,7 @@ namespace ProcessFMM {
 	inline std::vector<std::vector<Complex3D>> computeKernelMatrix(
 		const std::vector<OCTree::Node*>& nodes, const std::vector<kp_Point>& kp_,
 		const std::complex<double> k_wave, const int rows, const gaussPoints& gp,
-		const double alpha, const std::complex<double> eta_,
-		bool showProgressBar, Kernel&& kernelFunc)
+		const double alpha, bool showProgressBar, Kernel&& kernelFunc)
 	{
 		std::vector<std::vector<Complex3D>> results(rows, std::vector<Complex3D>(kp_.size()));
 
@@ -90,8 +89,8 @@ namespace ProcessFMM {
 						double zneg = gp.l1[i] * vn0.z + gp.l2[i] * vn1.z + gp.l3[i] * vn2.z;
 						Point rneg{ -1, xneg, yneg, zneg };
 
-						Complex3D posContrib = kernelFunc(rpos, center_, freeP, kp, k_wave, w, normalP, alpha, eta_);
-						Complex3D negContrib = kernelFunc(rneg, center_, freeN, kp, k_wave, w, normalN, alpha, eta_);
+						Complex3D posContrib = kernelFunc(rpos, center_, freeP, kp, k_wave, w, normalP, alpha);
+						Complex3D negContrib = kernelFunc(rneg, center_, freeN, kp, k_wave, w, normalN, alpha);
 
 						contrib.x += posContrib.x - negContrib.x;
 						contrib.y += posContrib.y - negContrib.y;
@@ -113,7 +112,7 @@ namespace ProcessFMM {
 
 	struct KernelVsmi_Efie {
 		inline Complex3D operator()(const Point& r, const double center[3], const Point& freeVertex,
-			double kp[3], const std::complex<double> k_wave, const double w, const double n_[3], const double alpha, const std::complex<double> eta_) const {
+			double kp[3], const std::complex<double> k_wave, const double w, const double n_[3], const double alpha) const {
 			// 向量 p = center - r
 			double p[3] = { center[0] - r.x, center[1] - r.y, center[2] - r.z };
 			double p_f[3] = { r.x - freeVertex.x, r.y - freeVertex.y, r.z - freeVertex.z };
@@ -129,7 +128,7 @@ namespace ProcessFMM {
 
 	struct KernelVfmj_Efie {
 		inline Complex3D operator()(const Point& r, const double center[3], const Point& freeVertex,
-			double kp[3], const std::complex<double> k_wave, const double w, const double n_[3], const double alpha, const std::complex<double> eta_) const {
+			double kp[3], const std::complex<double> k_wave, const double w, const double n_[3], const double alpha) const {
 			double p[3] = { r.x - center[0], r.y - center[1], r.z - center[2] };
 			double p_f[3] = { r.x - freeVertex.x, r.y - freeVertex.y, r.z - freeVertex.z };
 			std::complex<double> phase = k_wave * (p[0] * kp[0] + p[1] * kp[1] + p[2] * kp[2]);
@@ -148,7 +147,7 @@ namespace ProcessFMM {
 
 	struct KernelVfmj_Cfie {
 		inline Complex3D operator()(const Point& r, const double center[3], const Point& freeVertex,
-			double kp[3], const std::complex<double> k_wave, const double w, const double n_[3], const double alpha, const std::complex<double> eta_) const {
+			double kp[3], const std::complex<double> k_wave, const double w, const double n_[3], const double alpha) const {
 			double p[3] = { r.x - center[0], r.y - center[1], r.z - center[2] };
 			double p_f[3] = { r.x - freeVertex.x, r.y - freeVertex.y, r.z - freeVertex.z };
 			std::complex<double> phase = k_wave * (p[0] * kp[0] + p[1] * kp[1] + p[2] * kp[2]);
@@ -190,8 +189,8 @@ namespace ProcessFMM {
 		bool showProgress = true)
 	{
 		auto t_start = std::chrono::high_resolution_clock::now();
-		Vsmi = computeKernelMatrix(nodes, kp_, wave.k1(), rows, gausspoint, alpha, wave.eta1(), showProgress, KernelVsmi_Efie());
-		Vfmj = computeKernelMatrix(nodes, kp_, wave.k1(), rows, gausspoint, alpha, wave.eta1(), showProgress, KernelVfmj_Efie());
+		Vsmi = computeKernelMatrix(nodes, kp_, wave.k1(), rows, gausspoint, alpha, showProgress, KernelVsmi_Efie());
+		Vfmj = computeKernelMatrix(nodes, kp_, wave.k1(), rows, gausspoint, alpha, showProgress, KernelVfmj_Efie());
 		auto t_end = std::chrono::high_resolution_clock::now();
 		auto t_elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(t_end - t_start);
 		std::cout << "Info: Vsmi/Vfmj (EFIE) done, elapsed: " << t_elapsed.count() / 1000.0
@@ -207,8 +206,8 @@ namespace ProcessFMM {
 		const double alpha, bool showProgress = true)
 	{
 		auto t_start = std::chrono::high_resolution_clock::now();
-		Vsmi = computeKernelMatrix(nodes, kp_, wave.k1(), rows, gausspoint, alpha, wave.eta1(), showProgress, KernelVsmi_Efie());
-		Vfmj = computeKernelMatrix(nodes, kp_, wave.k1(), rows, gausspoint, alpha, wave.eta1(), showProgress, KernelVfmj_Cfie());
+		Vsmi = computeKernelMatrix(nodes, kp_, wave.k1(), rows, gausspoint, alpha, showProgress, KernelVsmi_Efie());
+		Vfmj = computeKernelMatrix(nodes, kp_, wave.k1(), rows, gausspoint, alpha, showProgress, KernelVfmj_Cfie());
 		auto t_end = std::chrono::high_resolution_clock::now();
 		auto t_elapsed = std::chrono::duration_cast<std::chrono::microseconds>(t_end - t_start);
 		std::cout << "Info: Vsmi/Vfmj (CFIE) done, elapsed: " << t_elapsed.count() / 1000.0
@@ -225,8 +224,8 @@ namespace ProcessFMM {
 		const double alpha, bool showProgress = true)
 	{
 		auto t_start = std::chrono::high_resolution_clock::now();
-		Vsmi = computeKernelMatrix(nodes, kp_, k_wave, rows, gausspoint, alpha, eta_, showProgress, KernelVsmi_Efie());
-		Vfmj = computeKernelMatrix(nodes, kp_, k_wave, rows, gausspoint, alpha, eta_, showProgress, KernelVfmj_Efie());
+		Vsmi = computeKernelMatrix(nodes, kp_, k_wave, rows, gausspoint, alpha, showProgress, KernelVsmi_Efie());
+		Vfmj = computeKernelMatrix(nodes, kp_, k_wave, rows, gausspoint, alpha, showProgress, KernelVfmj_Efie());
 		auto t_end = std::chrono::high_resolution_clock::now();
 		auto t_elapsed = std::chrono::duration_cast<std::chrono::microseconds>(t_end - t_start);
 		std::cout << "Info: Vsmi/Vfmj (Dielectric) done, elapsed: " << t_elapsed.count() / 1000.0
