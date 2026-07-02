@@ -219,7 +219,7 @@ namespace ProcessFMM {
 		std::vector<std::vector<Complex3D>>& Vfmj,
 		const std::vector<OCTree::Node*>& nodes,
 		const std::vector<kp_Point>& kp_,
-		const std::complex<double> k_wave, const std::complex<double> eta_,
+		const std::complex<double> k_wave,
 		const int rows, const gaussPoints& gausspoint,
 		const double alpha, bool showProgress = true)
 	{

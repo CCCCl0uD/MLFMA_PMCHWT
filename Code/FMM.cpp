@@ -74,12 +74,12 @@ FMM::FMM(const RCSExportConfig& cfg, const int selectIntegralEqu, const int sele
 
 		// k1: Vsmi1/Vfmj1
 		ProcessFMM::computeVsmi_Vfmj_Die(Vsmi, Vfmj,
-			octreeNodes_[maxLevel_], kp_lvl_k1[0], wave.k1(), wave.eta1(),
+			octreeNodes_[maxLevel_], kp_lvl_k1[0], wave.k1(),
 			row, gausspoint, alpha, 1);
 
 		// k2: Vsmi2/Vfmj2
 		ProcessFMM::computeVsmi_Vfmj_Die(Vsmi2, Vfmj2,
-			octreeNodes_[maxLevel_], kp_lvl_k2[0], wave.k2(), wave.eta2(),
+			octreeNodes_[maxLevel_], kp_lvl_k2[0], wave.k2(),
 			row, gausspoint, alpha, 1);
 
 		// PMCHWT: Z_near
@@ -291,7 +291,7 @@ void FMM::matrix_solver(int n, std::complex<double> x[], std::complex<double> rh
 							const int idx = ti * pN + pj;
 							const double d2k = WGL[ti] * WGL_phi;
 
-							const double khat[3] = { kp[idx].x, kp[idx].y, kp[idx].z };
+							const double khat[3] = { -kp[idx].x, -kp[idx].y, -kp[idx].z };
 
 							Complex3D kCrossV;
 							cross(kCrossV, khat, V[idx]);
