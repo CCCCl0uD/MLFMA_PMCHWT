@@ -48,15 +48,18 @@ public:
 	std::vector<std::vector<InterpData>> interpol_k1;        // 第2层到第maxLevel_ - 1层插值矩阵
 	std::vector<std::vector<InterpData>> interpol_k2;        // 第2层到第maxLevel_ - 1层插值矩阵
 
-	// ---- k1 空间 (EFIE/CFIE 共用) ----
+	// ---- k1 workspace (EFIE/CFIE) ----
 	std::vector<std::vector<Complex3D>> Vsmi, Vfmj;                             // 储存基层聚合和解聚合矩阵的二维复数数组
 	std::vector<std::vector<std::vector<std::complex<double>>>> TF;             // 储存各层转移因子矩阵的三维复数数组 (2, 3,..., maxLevel_ - 1, maxLevel_)
 	std::vector<std::vector<std::vector<Complex3D>>> Sm, Bm;                        // 各层的聚合矩阵的三维复数数组 (2, 3,..., maxLevel_ - 1, maxLevel_)
+	std::vector<std::vector<std::vector<Complex3D>>> Sm_J1, Bm_J1;
+	std::vector<std::vector<std::vector<Complex3D>>> Sm_M1, Bm_M1;
 
-	// ---- k2 空间 (介质内部) ----
+	// ---- PMCHWT k2 workspace ----
 	std::vector<std::vector<Complex3D>> Vsmi2, Vfmj2;
 	std::vector<std::vector<std::vector<std::complex<double>>>> TF2;
-	std::vector<std::vector<std::vector<Complex3D>>> Sm2, Bm2;
+	std::vector<std::vector<std::vector<Complex3D>>> Sm_J2, Bm_J2;
+	std::vector<std::vector<std::vector<Complex3D>>> Sm_M2, Bm_M2;
 
 	std::vector<std::vector<int>> Z_near_id;
 	std::vector<std::vector<std::complex<double>>> Z_near;                      // 储存近场矩阵Z_near
@@ -67,8 +70,8 @@ public:
 	void matrix_solver(int n, std::complex<double> x[], std::complex<double> rhs[], int itr_max, int mr, double tol_abs, double tol_rel);
 
 private:
-	void initMLFMMStorage();
-
+	void initPECWorkspace();
+	void initDIEWorkspace();
 	void mlfmm_Dual_Pec_Efie(const RCSExportConfig& cfg, const std::string pol_wave);
 	void mlfmm_Mono_Pec_Efie(const RCSExportConfig& cfg, const std::string pol_wave);
 	void mlfmm_Dual_Pec_Cfie(const RCSExportConfig& cfg, const std::string pol_wave);

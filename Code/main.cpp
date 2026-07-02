@@ -52,6 +52,11 @@ RCSExportConfig createRCSExportConfig(const std::string& inputFile,
 	return cfg;
 }
 
+//\f:Times New Roman(f = 0.8GHz)
+//\f : Times New Roman(HH polarizations)
+//\g(q)\ - (\f:Times New Roman(i)) = \g(q)\ - (\f:Times New Roman(s)) = 90\ + (。), \g(f)\ - (\f:Times New Roman(i)) = 0\ + (。)
+//\g(e)\ - (\f:Times New Roman(r)) = (4, -0.001)
+
 int main(int argc, char* argv[]) {
 	// ------- Batch -------
 	if (argc >= 2) {
@@ -91,9 +96,9 @@ int main(int argc, char* argv[]) {
 
 	std::string selectMono_Dual = "dual";// mono / dual
 	std::string polarization = "h";// horizontal->90 / vertical->0
-	int selectAlgorithm = 1;// 0==>MoM;1==>FMM;2==>MLFMM
+	int selectAlgorithm = 2;// 0==>MoM;1==>FMM;2==>MLFMM
 	int selectIntegralEqu = 2;// 0==>EFIE;1==>CFIE;2==>PMCHWT
-	int selectMatrixSolver = 1;// 0==>GMRES;1==>CGS
+	int selectMatrixSolver = 0;// 0==>GMRES;1==>CGS
 	std::complex<double> epsilonR(4.0, -0.001);
 	std::complex<double> muR(1.0, 0.0);
 	/************************************************************************/
