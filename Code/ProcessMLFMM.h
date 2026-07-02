@@ -228,59 +228,23 @@ namespace ProcessMLFMM {
 			OCTree::Node* node = finestNodes[nodeIdx];
 			const int rwgNum = static_cast<int>(node->rwgIndices.size());
 			const auto& B = Bm[maxLevel_ - 2][nodeIdx];
+
 			for (int r = 0; r < rwgNum; ++r) {
 				int rwgid = node->rwgIndices[r]->rwgid;
 				const auto& V = Vfmj[rwgid];
 				std::complex<double> val(0.0, 0.0);
-				for (int tt = 0; tt < tN; ++tt)
-					for (int pp = 0; pp < pN; ++pp)
-						val += lexpKpDot(B[tt * pN + pp], V[tt * pN + pp]);
-				val *= (k_ * eta_ / (4.0 * Pi)) * (k_ / (4.0 * Pi));
-				const int near = static_cast<int>(Z_near[rwgid].size());
-				for (int j = 0; j < near; ++j)
-					val += x[Z_near_id[rwgid][j]] * Z_near[rwgid][j];
-				w[rwgid] = val;
-			}
-		}
-	}
-
-	// ============================================================================
-	// 8. lexpPMCHWT — PMCHWT 单次 Pass 解聚合 (L + K 同时计算)
-	//    constL/constK : L/K 算子常数 (含符号)
-	//    wOffset_L/wOffset_K : 写入 w 的偏移 (0 或 N)
-	// ============================================================================
-	inline void lexpPMCHWT(std::complex<double>* w,
-		std::complex<double> constL, std::complex<double> constK,
-		int wOffset_L, int wOffset_K, int N,
-		const std::vector<OCTree::Node*>& finestNodes,
-		const std::vector<std::vector<Complex3D>>& Vfmj,
-		const std::vector<std::vector<std::vector<Complex3D>>>& Bm,
-		const std::vector<kp_Point>& kpFinest,
-		int tN, int pN, int maxLevel_)
-	{
-		const int nodeNum = static_cast<int>(finestNodes.size());
-		const int finestIdx = maxLevel_ - 2;
-#pragma omp parallel for schedule(dynamic)
-		for (int nodeIdx = 0; nodeIdx < nodeNum; ++nodeIdx) {
-			OCTree::Node* nd = finestNodes[nodeIdx];
-			const auto& BB = Bm[finestIdx][nodeIdx];
-			for (int ri = 0; ri < static_cast<int>(nd->rwgIndices.size()); ++ri) {
-				int rwgid = nd->rwgIndices[ri]->rwgid;
-				const auto& V = Vfmj[rwgid];
-				std::complex<double> valL(0.0, 0.0);
-				std::complex<double> valK(0.0, 0.0);
 				for (int tt = 0; tt < tN; ++tt) {
 					for (int pp = 0; pp < pN; ++pp) {
-						int idx = tt * pN + pp;
-						valL += lexpKpDot(BB[idx], V[idx]);
-						double kpp[3] = { kpFinest[idx].x, kpFinest[idx].y, kpFinest[idx].z };
-						Complex3D kcv;
-						cross(kcv, kpp, V[idx]);
-						valK += lexpKpDot(BB[idx], kcv);
+						val += lexpKpDot(B[tt * pN + pp], V[tt * pN + pp]);
 					}
 				}
-				w[wOffset_L + rwgid] += constL * valL;
-				w[wOffset_K + rwgid] += constK * valK;
+				val *= (k_ * eta_ / (4.0 * Pi)) * (k_ / (4.0 * Pi));
+
+				const int near = static_cast<int>(Z_near[rwgid].size());
+				for (int j = 0; j < near; ++j) {
+					val += x[Z_near_id[rwgid][j]] * Z_near[rwgid][j];
+				}
+				w[rwgid] = val;
 			}
 		}
 	}

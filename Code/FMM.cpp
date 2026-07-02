@@ -202,7 +202,7 @@ void FMM::matrix_solver(int n, std::complex<double> x[], std::complex<double> rh
 		else {
 			// ===== PMCHWT matrix-vector product =====
 			// Unknown ordering:
-			//   x[0:N)     = J coefficients
+			//   x[0:N)     = \eta_0 * J coefficients
 			//   x[N:2*N)   = M coefficients
 			//
 			// Equation ordering:
@@ -224,7 +224,6 @@ void FMM::matrix_solver(int n, std::complex<double> x[], std::complex<double> rh
 			const int tN2 = static_cast<int>(theta_level_k2[0].size());
 			const int pN2 = static_cast<int>(phi_level_k2[0].size());
 
-			// const参数存疑
 			const std::complex<double> const1 = wave.k1() * wave.k1() / (16.0 * Pi * Pi);
 			const std::complex<double> const2 = wave.k2() * wave.k2() / (16.0 * Pi * Pi);
 
