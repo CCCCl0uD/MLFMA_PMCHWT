@@ -45,7 +45,7 @@ MoM::MoM(
 	if (integralEquType_ == 2) {
 		Zmartix::computeZ_die_pmchwt(rwgs, row, wave, gausspoint, Z_mom);
 
-		exportZ(cfg);
+		//exportZ(cfg);
 
 		if (selectMono_Dual == "dual") {
 			mom_Dual_Die_Pmchwt(cfg, pol_wave);

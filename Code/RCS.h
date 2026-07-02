@@ -356,7 +356,7 @@ namespace RCSUtils {
 
 		computeV(solver, kinc, einc, hinc);
 
-		exportV(solver, cfg);
+		//exportV(solver, cfg);
 
 		// PMCHW: æÿ’Û¥Û–° = 2N = 2 * solver.row
 		int totalRow = 2 * solver.row;

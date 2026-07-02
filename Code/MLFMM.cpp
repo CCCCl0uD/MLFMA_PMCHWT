@@ -25,64 +25,77 @@ MLFMM::MLFMM(
 	AlgoFMM::computeBase(octreeNodes_, wave, integralEquType_, maxLevel_, static_cast<int>(rwgs.size()), L_k1, L_k2, row, levelSpan,
 		WGL_k1, WGL_k2, WGL_phi_k1, WGL_phi_k2, theta_level_k1, theta_level_k2, phi_level_k1, phi_level_k2, kp_lvl_k1, kp_lvl_k2);
 
-	// k1: TF1
-	AlgoMLFMM::computeTransferFactorMatrix(TF, octreeNodesDRvec_, kp_lvl_k1, maxLevel_, L_k1, wave.k1());
+	if (integralEquType_ != 2) {
+		// k1: TF1
+		AlgoMLFMM::computeTransferFactorMatrix(TF, octreeNodesDRvec_, kp_lvl_k1, maxLevel_, L_k1, wave.k1());
 
-	// k1: Interpolation matrix
-	AlgoMLFMM::computeInterpolationMatrix(interpol_k1, kp_lvl_k1, theta_level_k1, phi_level_k1, maxLevel_);
+		// k1: Interpolation matrix
+		AlgoMLFMM::computeInterpolationMatrix(interpol_k1, kp_lvl_k1, theta_level_k1, phi_level_k1, maxLevel_);
 
-	initMLFMMStorage();
+		if (integralEquType_ == 0) {
+			// k1: Vsmi/Vfmj
+			ProcessFMM::computeVsmi_Vfmj_Efie(Vsmi, Vfmj, octreeNodes_[maxLevel_],
+				kp_lvl_k1[0], wave, row, gausspoint, alpha, 1);// Compute Vsmi and Vfmj (EFIE)
 
-	if (integralEquType_ == 0) {
-		// k1: Vsmi/Vfmj
-		ProcessFMM::computeVsmi_Vfmj_Efie(Vsmi, Vfmj, octreeNodes_[maxLevel_],
-			kp_lvl_k1[0], wave, row, gausspoint, alpha, 1);// Compute Vsmi and Vfmj (EFIE)
+			// k1: Z_near (2N × 2N)
+			Zmartix::computeZ_fmm_pec_efie(octreeNodes_[maxLevel_], rwgs, Z_near, Z_near_id,
+				row, wave, gausspoint, 1);
 
-		// k1: Z_near (2N × 2N)
-		Zmartix::computeZ_fmm_pec_efie(octreeNodes_[maxLevel_], rwgs, Z_near, Z_near_id,
-			row, wave, gausspoint, 1);
+			initMLFMMStorage();
 
-		if (selectMono_Dual == "dual") {
-			mlfmm_Dual_Pec_Efie(cfg, pol_wave);
+			if (selectMono_Dual == "dual") {
+				mlfmm_Dual_Pec_Efie(cfg, pol_wave);
+			}
+			if (selectMono_Dual == "mono") {
+				mlfmm_Mono_Pec_Efie(cfg, pol_wave);
+			}
 		}
 
-		if (selectMono_Dual == "mono") {
-			mlfmm_Mono_Pec_Efie(cfg, pol_wave);
+		if (integralEquType_ == 1) {
+			// k1: Vsmi/Vfmj
+			ProcessFMM::computeVsmi_Vfmj_Cfie(Vsmi, Vfmj, octreeNodes_[maxLevel_],
+				kp_lvl_k1[0], wave, row, gausspoint, alpha, 1);// Compute Vsmi and Vfmj (CFIE)
+
+			// k1: Z_near (2N × 2N)
+			Zmartix::computeZ_fmm_pec_cfie(octreeNodes_[maxLevel_], rwgs, Z_near, Z_near_id,
+				row, wave, gausspoint, alpha, 1);
+
+			initMLFMMStorage();
+
+			if (selectMono_Dual == "dual") {
+				mlfmm_Dual_Pec_Cfie(cfg, pol_wave);
+			}
+			if (selectMono_Dual == "mono") {
+				mlfmm_Mono_Pec_Cfie(cfg, pol_wave);
+			}
 		}
 	}
-
-	if (integralEquType_ == 1) {
-		// k1: Vsmi/Vfmj
-		ProcessFMM::computeVsmi_Vfmj_Cfie(Vsmi, Vfmj, octreeNodes_[maxLevel_],
-			kp_lvl_k1[0], wave, row, gausspoint, alpha, 1);// Compute Vsmi and Vfmj (CFIE)
-
-		// k1: Z_near (2N × 2N)
-		Zmartix::computeZ_fmm_pec_cfie(octreeNodes_[maxLevel_], rwgs, Z_near, Z_near_id,
-			row, wave, gausspoint, alpha, 1);
-
-		if (selectMono_Dual == "dual") {
-			mlfmm_Dual_Pec_Cfie(cfg, pol_wave);
-		}
-
-		if (selectMono_Dual == "mono") {
-			mlfmm_Mono_Pec_Cfie(cfg, pol_wave);
-		}
-	}
-
-	if (integralEquType_ == 2) {
+	else {
 		// k1: Vsmi/Vfmj
 		ProcessFMM::computeVsmi_Vfmj_Die(Vsmi, Vfmj,
-			octreeNodes_[maxLevel_], kp_lvl_k1[0], wave.k1(), wave.eta1(), row, gausspoint,
+			octreeNodes_[maxLevel_], kp_lvl_k1[0], wave.k1(), row, gausspoint,
 			alpha, 1);
 
 		// k2: Vsmi2/Vfmj2
 		ProcessFMM::computeVsmi_Vfmj_Die(Vsmi2, Vfmj2,
-			octreeNodes_[maxLevel_], kp_lvl_k2[0], wave.k2(), wave.eta2(), row, gausspoint,
+			octreeNodes_[maxLevel_], kp_lvl_k2[0], wave.k2(), row, gausspoint,
 			alpha, 1);
+
+		// k1: TF1
+		AlgoMLFMM::computeTransferFactorMatrix(TF, octreeNodesDRvec_, kp_lvl_k1,
+			maxLevel_, L_k1, wave.k1());
 
 		// k2: TF2
 		AlgoMLFMM::computeTransferFactorMatrix(TF2, octreeNodesDRvec_, kp_lvl_k2,
 			maxLevel_, L_k2, wave.k2());
+
+		// k1: Interpolation matrix
+		AlgoMLFMM::computeInterpolationMatrix(interpol_k1, kp_lvl_k1,
+			theta_level_k1, phi_level_k1, maxLevel_);
+
+		// k2: Interpolation matrix
+		AlgoMLFMM::computeInterpolationMatrix(interpol_k2, kp_lvl_k2,
+			theta_level_k2, phi_level_k2, maxLevel_);
 
 		// PMCHWT: Z_near (2N × 2N CSR)
 		Zmartix::computeZ_fmm_die_pmchwt(octreeNodes_[maxLevel_], rwgs, Z_near, Z_near_id,
@@ -111,22 +124,6 @@ void MLFMM::initMLFMMStorage() {
 		for (int node = 0; node < nodes; ++node) {
 			Sm[level][node].assign(kp, Complex3D());
 			Bm[level][node].assign(kp, Complex3D());
-		}
-	}
-	// ---- k2 ----
-	if (integralEquType_ == 2) {
-		Sm2.resize(lvl);
-		Bm2.resize(lvl);
-		for (int level = 0; level < lvl; ++level) {
-			int nodes = static_cast<int>(octreeNodes_[level + 2].size());
-			int rev = levelSpan - 1 - level;
-			int kp = static_cast<int>(kp_lvl_k2[rev].size());
-			Sm2[level].resize(nodes);
-			Bm2[level].resize(nodes);
-			for (int node = 0; node < nodes; ++node) {
-				Sm2[level][node].assign(kp, Complex3D());
-				Bm2[level][node].assign(kp, Complex3D());
-			}
 		}
 	}
 }
@@ -172,62 +169,63 @@ void MLFMM::matrix_solver(int n, std::complex<double> x[], std::complex<double> 
 				wave.k1(), wave.eta1(), Z_near, Z_near_id, x);
 			return;
 		}
+		else {
+			// ============ PMCHW ============
+			const int N = row;
+			const int tN_k2 = static_cast<int>(theta_level_k2[0].size());
+			const int pN_k2 = static_cast<int>(phi_level_k2[0].size());
+			const std::complex<double> const1 = wave.k1() * wave.k1() / (16.0 * Pi * Pi);
+			const std::complex<double> const2 = wave.k2() * wave.k2() / (16.0 * Pi * Pi);
 
-		// ============ PMCHW ============
-		const int N = row;
-		const int tN_k2 = static_cast<int>(theta_level_k2[0].size());
-		const int pN_k2 = static_cast<int>(phi_level_k2[0].size());
-		const std::complex<double> const1 = wave.k1() * wave.k1() * wave.eta1() / (16.0 * Pi * Pi);
-		const std::complex<double> const2 = wave.k2() * wave.k2() / (16.0 * Pi * Pi);
+			// ---- Pass 1: k1 空间 J → L1(J)、K1(J) ----
+			ProcessMLFMM::clearSmBm(Sm, Bm);
+			ProcessMLFMM::mexp(Sm, octreeNodes_[maxLevel_], Vsmi, kp_lvl_k1[0], x, 0, maxlvl);
+			ProcessMLFMM::m2m(Sm, octreeNodes_, kp_lvl_k1, interpol_k1, maxlvl, levelSpan, wave.k1());
+			ProcessMLFMM::m2l(Sm, Bm, octreeNodes_, TF, kp_lvl_k1, WGL_k1, WGL_phi_k1, phi_level_k1, maxlvl, levelSpan);
+			ProcessMLFMM::l2l(Bm, octreeNodes_, kp_lvl_k1, phi_level_k1, interpol_k1, maxlvl, levelSpan, wave.k1());
+			ProcessMLFMM::lexpPMCHWT(w, const1, -const1, 0, N, N,
+				octreeNodes_[maxLevel_], Vfmj, Bm, kp_lvl_k1[0], tN_k1, pN_k1, maxlvl);
 
-		// ---- Pass 1: k1 空间 J → L1(J)、K1(J) ----
-		ProcessMLFMM::clearSmBm(Sm, Bm);
-		ProcessMLFMM::mexp(Sm, octreeNodes_[maxLevel_], Vsmi, kp_lvl_k1[0], x, 0, maxlvl);
-		ProcessMLFMM::m2m(Sm, octreeNodes_, kp_lvl_k1, interpol_k1, maxlvl, levelSpan, wave.k1());
-		ProcessMLFMM::m2l(Sm, Bm, octreeNodes_, TF, kp_lvl_k1, WGL_k1, WGL_phi_k1, phi_level_k1, maxlvl, levelSpan);
-		ProcessMLFMM::l2l(Bm, octreeNodes_, kp_lvl_k1, phi_level_k1, interpol_k1, maxlvl, levelSpan, wave.k1());
-		ProcessMLFMM::lexpPMCHWT(w, const1, -const1, 0, N, N,
-			octreeNodes_[maxLevel_], Vfmj, Bm, kp_lvl_k1[0], tN_k1, pN_k1, maxlvl);
+			// ---- Pass 2: k1 空间 M → K1(M)、L1(M) ----
+			ProcessMLFMM::clearSmBm(Sm, Bm);
+			ProcessMLFMM::mexp(Sm, octreeNodes_[maxLevel_], Vsmi, kp_lvl_k1[0], x, N, maxlvl);
+			ProcessMLFMM::m2m(Sm, octreeNodes_, kp_lvl_k1, interpol_k1, maxlvl, levelSpan, wave.k1());
+			ProcessMLFMM::m2l(Sm, Bm, octreeNodes_, TF, kp_lvl_k1, WGL_k1, WGL_phi_k1, phi_level_k1, maxlvl, levelSpan);
+			ProcessMLFMM::l2l(Bm, octreeNodes_, kp_lvl_k1, phi_level_k1, interpol_k1, maxlvl, levelSpan, wave.k1());
+			ProcessMLFMM::lexpPMCHWT(w, const1, const1, N, 0, N,
+				octreeNodes_[maxLevel_], Vfmj, Bm, kp_lvl_k1[0], tN_k1, pN_k1, maxlvl);
 
-		// ---- Pass 2: k1 空间 M → K1(M)、L1(M) ----
-		ProcessMLFMM::clearSmBm(Sm, Bm);
-		ProcessMLFMM::mexp(Sm, octreeNodes_[maxLevel_], Vsmi, kp_lvl_k1[0], x, N, maxlvl);
-		ProcessMLFMM::m2m(Sm, octreeNodes_, kp_lvl_k1, interpol_k1, maxlvl, levelSpan, wave.k1());
-		ProcessMLFMM::m2l(Sm, Bm, octreeNodes_, TF, kp_lvl_k1, WGL_k1, WGL_phi_k1, phi_level_k1, maxlvl, levelSpan);
-		ProcessMLFMM::l2l(Bm, octreeNodes_, kp_lvl_k1, phi_level_k1, interpol_k1, maxlvl, levelSpan, wave.k1());
-		ProcessMLFMM::lexpPMCHWT(w, const1, const1, N, 0, N,
-			octreeNodes_[maxLevel_], Vfmj, Bm, kp_lvl_k1[0], tN_k1, pN_k1, maxlvl);
+			// ---- Pass 3: k2 空间 J → L2(J)、K2(J) ----
+			ProcessMLFMM::clearSmBm(Sm2, Bm2);
+			ProcessMLFMM::mexp(Sm2, octreeNodes_[maxLevel_], Vsmi2, kp_lvl_k2[0], x, 0, maxlvl);
+			ProcessMLFMM::m2m(Sm2, octreeNodes_, kp_lvl_k2, interpol_k2, maxlvl, levelSpan, wave.k2());
+			ProcessMLFMM::m2l(Sm2, Bm2, octreeNodes_, TF2, kp_lvl_k2, WGL_k2, WGL_phi_k2, phi_level_k2, maxlvl, levelSpan);
+			ProcessMLFMM::l2l(Bm2, octreeNodes_, kp_lvl_k2, phi_level_k2, interpol_k2, maxlvl, levelSpan, wave.k2());
+			ProcessMLFMM::lexpPMCHWT(w, const2 * wave.eta2(), -const2 * wave.eta1(), 0, N, N,
+				octreeNodes_[maxLevel_], Vfmj2, Bm2, kp_lvl_k2[0], tN_k2, pN_k2, maxlvl);
 
-		// ---- Pass 3: k2 空间 J → L2(J)、K2(J) ----
-		ProcessMLFMM::clearSmBm(Sm2, Bm2);
-		ProcessMLFMM::mexp(Sm2, octreeNodes_[maxLevel_], Vsmi2, kp_lvl_k2[0], x, 0, maxlvl);
-		ProcessMLFMM::m2m(Sm2, octreeNodes_, kp_lvl_k2, interpol_k2, maxlvl, levelSpan, wave.k2());
-		ProcessMLFMM::m2l(Sm2, Bm2, octreeNodes_, TF2, kp_lvl_k2, WGL_k2, WGL_phi_k2, phi_level_k2, maxlvl, levelSpan);
-		ProcessMLFMM::l2l(Bm2, octreeNodes_, kp_lvl_k2, phi_level_k2, interpol_k2, maxlvl, levelSpan, wave.k2());
-		ProcessMLFMM::lexpPMCHWT(w, const2 * wave.eta2(), -const2 * wave.eta1(), 0, N, N,
-			octreeNodes_[maxLevel_], Vfmj2, Bm2, kp_lvl_k2[0], tN_k2, pN_k2, maxlvl);
+			// ---- Pass 4: k2 空间 M → K2(M)、L2(M) ----
+			ProcessMLFMM::clearSmBm(Sm2, Bm2);
+			ProcessMLFMM::mexp(Sm2, octreeNodes_[maxLevel_], Vsmi2, kp_lvl_k2[0], x, N, maxlvl);
+			ProcessMLFMM::m2m(Sm2, octreeNodes_, kp_lvl_k2, interpol_k2, maxlvl, levelSpan, wave.k2());
+			ProcessMLFMM::m2l(Sm2, Bm2, octreeNodes_, TF2, kp_lvl_k2, WGL_k2, WGL_phi_k2, phi_level_k2, maxlvl, levelSpan);
+			ProcessMLFMM::l2l(Bm2, octreeNodes_, kp_lvl_k2, phi_level_k2, interpol_k2, maxlvl, levelSpan, wave.k2());
+			ProcessMLFMM::lexpPMCHWT(w, const2 * wave.eta2() * wave.epsilonR(), const2 * wave.eta1(), N, 0, N,
+				octreeNodes_[maxLevel_], Vfmj2, Bm2, kp_lvl_k2[0], tN_k2, pN_k2, maxlvl);
 
-		// ---- Pass 4: k2 空间 M → K2(M)、L2(M) ----
-		ProcessMLFMM::clearSmBm(Sm2, Bm2);
-		ProcessMLFMM::mexp(Sm2, octreeNodes_[maxLevel_], Vsmi2, kp_lvl_k2[0], x, N, maxlvl);
-		ProcessMLFMM::m2m(Sm2, octreeNodes_, kp_lvl_k2, interpol_k2, maxlvl, levelSpan, wave.k2());
-		ProcessMLFMM::m2l(Sm2, Bm2, octreeNodes_, TF2, kp_lvl_k2, WGL_k2, WGL_phi_k2, phi_level_k2, maxlvl, levelSpan);
-		ProcessMLFMM::l2l(Bm2, octreeNodes_, kp_lvl_k2, phi_level_k2, interpol_k2, maxlvl, levelSpan, wave.k2());
-		ProcessMLFMM::lexpPMCHWT(w, const2 * wave.eta2() * wave.epsilonR(), const2 * wave.eta1(), N, 0, N,
-			octreeNodes_[maxLevel_], Vfmj2, Bm2, kp_lvl_k2[0], tN_k2, pN_k2, maxlvl);
-
-		// ---- 近场: 2N×2N ----
-		const int finestN = static_cast<int>(octreeNodes_[maxLevel_].size());
+			// ---- 近场: 2N×2N ----
+			const int finestN = static_cast<int>(octreeNodes_[maxLevel_].size());
 #pragma omp parallel for schedule(dynamic)
-		for (int nodeIdx = 0; nodeIdx < finestN; ++nodeIdx) {
-			OCTree::Node* nd = octreeNodes_[maxLevel_][nodeIdx];
-			for (int ri = 0; ri < static_cast<int>(nd->rwgIndices.size()); ++ri) {
-				int rwgid = nd->rwgIndices[ri]->rwgid;
-				for (int j = 0; j < static_cast<int>(Z_near[rwgid].size()); ++j) {
-					w[rwgid] += x[Z_near_id[rwgid][j]] * Z_near[rwgid][j];
-				}
-				for (int j = 0; j < static_cast<int>(Z_near[N + rwgid].size()); ++j) {
-					w[N + rwgid] += x[Z_near_id[N + rwgid][j]] * Z_near[N + rwgid][j];
+			for (int nodeIdx = 0; nodeIdx < finestN; ++nodeIdx) {
+				OCTree::Node* nd = octreeNodes_[maxLevel_][nodeIdx];
+				for (int ri = 0; ri < static_cast<int>(nd->rwgIndices.size()); ++ri) {
+					int rwgid = nd->rwgIndices[ri]->rwgid;
+					for (int j = 0; j < static_cast<int>(Z_near[rwgid].size()); ++j) {
+						w[rwgid] += x[Z_near_id[rwgid][j]] * Z_near[rwgid][j];
+					}
+					for (int j = 0; j < static_cast<int>(Z_near[N + rwgid].size()); ++j) {
+						w[N + rwgid] += x[Z_near_id[N + rwgid][j]] * Z_near[N + rwgid][j];
+					}
 				}
 			}
 		}
