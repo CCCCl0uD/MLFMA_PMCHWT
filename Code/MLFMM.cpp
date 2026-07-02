@@ -149,17 +149,20 @@ size_t MLFMM::computeMem() {
 }
 
 void MLFMM::matrix_solver(int n, std::complex<double> x[], std::complex<double> rhs[], int itr_max, int mr, double tol_abs, double tol_rel) {
-	const int tN_k1 = static_cast<int>(theta_level_k1[0].size());
-	const int pN_k1 = static_cast<int>(phi_level_k1[0].size());
-	const int maxlvl = maxLevel_;
+	const int EquType_ = integralEquType_;
 
-	auto ax = [this, tN_k1, pN_k1, maxlvl](int n, const std::complex<double>* x, std::complex<double>* w) {
+	auto ax = [this, EquType_](int n, const std::complex<double>* x, std::complex<double>* w) {
 		for (int i = 0; i < n; ++i) {
 			w[i] = std::complex<double>(0.0, 0.0);
 		}
 
 		// ============ PEC ============
-		if (integralEquType_ != 2) {
+		if (EquType_ != 2) {
+			const int maxlvl = maxLevel_;
+
+			const int tN_k1 = static_cast<int>(theta_level_k1[0].size());
+			const int pN_k1 = static_cast<int>(phi_level_k1[0].size());
+
 			ProcessMLFMM::clearSmBm(Sm, Bm);
 			ProcessMLFMM::mexp(Sm, octreeNodes_[maxLevel_], Vsmi, kp_lvl_k1[0], x, 0, maxlvl);
 			ProcessMLFMM::m2m(Sm, octreeNodes_, kp_lvl_k1, interpol_k1, maxlvl, levelSpan, wave.k1());
@@ -170,51 +173,152 @@ void MLFMM::matrix_solver(int n, std::complex<double> x[], std::complex<double> 
 			return;
 		}
 		else {
-			// ============ PMCHW ============
+			// ===== PMCHWT matrix-vector product =====
+			// Unknown ordering:
+			//   x[0:N)     = \eta_0 * J coefficients
+			//   x[N:2*N)   = M coefficients
+			//
+			// Equation ordering:
+			//   w[0:N)     = electric-current testing block
+			//   w[N:2*N)   = magnetic-current testing block
 			const int N = row;
+			const int maxlvl = maxLevel_;
+			const int finestIdx = maxlvl - 2;
+
+			const int K1 = static_cast<int>(kp_lvl_k1[0].size());
+			const int K2 = static_cast<int>(kp_lvl_k2[0].size());
+
+			const std::complex<double> etai = wave.etai();
+
 			const int tN_k2 = static_cast<int>(theta_level_k2[0].size());
 			const int pN_k2 = static_cast<int>(phi_level_k2[0].size());
+			const int tN_k1 = static_cast<int>(theta_level_k1[0].size());
+			const int pN_k1 = static_cast<int>(phi_level_k1[0].size());
+
 			const std::complex<double> const1 = wave.k1() * wave.k1() / (16.0 * Pi * Pi);
 			const std::complex<double> const2 = wave.k2() * wave.k2() / (16.0 * Pi * Pi);
 
-			// ---- Pass 1: k1 空间 J → L1(J)、K1(J) ----
-			ProcessMLFMM::clearSmBm(Sm, Bm);
-			ProcessMLFMM::mexp(Sm, octreeNodes_[maxLevel_], Vsmi, kp_lvl_k1[0], x, 0, maxlvl);
-			ProcessMLFMM::m2m(Sm, octreeNodes_, kp_lvl_k1, interpol_k1, maxlvl, levelSpan, wave.k1());
-			ProcessMLFMM::m2l(Sm, Bm, octreeNodes_, TF, kp_lvl_k1, WGL_k1, WGL_phi_k1, phi_level_k1, maxlvl, levelSpan);
-			ProcessMLFMM::l2l(Bm, octreeNodes_, kp_lvl_k1, phi_level_k1, interpol_k1, maxlvl, levelSpan, wave.k1());
-			ProcessMLFMM::lexpPMCHWT(w, const1, -const1, 0, N, N,
-				octreeNodes_[maxLevel_], Vfmj, Bm, kp_lvl_k1[0], tN_k1, pN_k1, maxlvl);
+			auto makeWork = [&](const std::vector<std::vector<kp_Point>>& kpLevel) {
+				std::vector<std::vector<std::vector<Complex3D>>> work(maxlvl - 1);
+				for (int level = 0; level <= finestIdx; ++level) {
+					const int treeLevel = level + 2;
+					const int nodeCount = static_cast<int>(octreeNodes_[treeLevel].size());
+					const int kpCount = static_cast<int>(kpLevel[level].size());
 
-			// ---- Pass 2: k1 空间 M → K1(M)、L1(M) ----
-			ProcessMLFMM::clearSmBm(Sm, Bm);
-			ProcessMLFMM::mexp(Sm, octreeNodes_[maxLevel_], Vsmi, kp_lvl_k1[0], x, N, maxlvl);
-			ProcessMLFMM::m2m(Sm, octreeNodes_, kp_lvl_k1, interpol_k1, maxlvl, levelSpan, wave.k1());
-			ProcessMLFMM::m2l(Sm, Bm, octreeNodes_, TF, kp_lvl_k1, WGL_k1, WGL_phi_k1, phi_level_k1, maxlvl, levelSpan);
-			ProcessMLFMM::l2l(Bm, octreeNodes_, kp_lvl_k1, phi_level_k1, interpol_k1, maxlvl, levelSpan, wave.k1());
-			ProcessMLFMM::lexpPMCHWT(w, const1, const1, N, 0, N,
-				octreeNodes_[maxLevel_], Vfmj, Bm, kp_lvl_k1[0], tN_k1, pN_k1, maxlvl);
+					work[level].resize(nodeCount);
+					for (int nodeIdx = 0; nodeIdx < nodeCount; ++nodeIdx) {
+						work[level][nodeIdx].assign(kpCount, Complex3D());
+					}
+				}
+				return work;
+				};
 
-			// ---- Pass 3: k2 空间 J → L2(J)、K2(J) ----
-			ProcessMLFMM::clearSmBm(Sm2, Bm2);
-			ProcessMLFMM::mexp(Sm2, octreeNodes_[maxLevel_], Vsmi2, kp_lvl_k2[0], x, 0, maxlvl);
-			ProcessMLFMM::m2m(Sm2, octreeNodes_, kp_lvl_k2, interpol_k2, maxlvl, levelSpan, wave.k2());
-			ProcessMLFMM::m2l(Sm2, Bm2, octreeNodes_, TF2, kp_lvl_k2, WGL_k2, WGL_phi_k2, phi_level_k2, maxlvl, levelSpan);
-			ProcessMLFMM::l2l(Bm2, octreeNodes_, kp_lvl_k2, phi_level_k2, interpol_k2, maxlvl, levelSpan, wave.k2());
-			ProcessMLFMM::lexpPMCHWT(w, const2 * wave.eta2(), -const2 * wave.eta1(), 0, N, N,
-				octreeNodes_[maxLevel_], Vfmj2, Bm2, kp_lvl_k2[0], tN_k2, pN_k2, maxlvl);
+			// k1 external-region workspaces
+			auto Sm_J1 = makeWork(kp_lvl_k1);
+			auto Bm_J1 = makeWork(kp_lvl_k1);
+			auto Sm_M1 = makeWork(kp_lvl_k1);
+			auto Bm_M1 = makeWork(kp_lvl_k1);
 
-			// ---- Pass 4: k2 空间 M → K2(M)、L2(M) ----
-			ProcessMLFMM::clearSmBm(Sm2, Bm2);
-			ProcessMLFMM::mexp(Sm2, octreeNodes_[maxLevel_], Vsmi2, kp_lvl_k2[0], x, N, maxlvl);
-			ProcessMLFMM::m2m(Sm2, octreeNodes_, kp_lvl_k2, interpol_k2, maxlvl, levelSpan, wave.k2());
-			ProcessMLFMM::m2l(Sm2, Bm2, octreeNodes_, TF2, kp_lvl_k2, WGL_k2, WGL_phi_k2, phi_level_k2, maxlvl, levelSpan);
-			ProcessMLFMM::l2l(Bm2, octreeNodes_, kp_lvl_k2, phi_level_k2, interpol_k2, maxlvl, levelSpan, wave.k2());
-			ProcessMLFMM::lexpPMCHWT(w, const2 * wave.eta2() * wave.epsilonR(), const2 * wave.eta1(), N, 0, N,
-				octreeNodes_[maxLevel_], Vfmj2, Bm2, kp_lvl_k2[0], tN_k2, pN_k2, maxlvl);
+			// k2 internal-region workspaces
+			auto Sm_J2 = makeWork(kp_lvl_k2);
+			auto Bm_J2 = makeWork(kp_lvl_k2);
+			auto Sm_M2 = makeWork(kp_lvl_k2);
+			auto Bm_M2 = makeWork(kp_lvl_k2);
 
-			// ---- 近场: 2N×2N ----
+			// ---- Pass 1: k1, J → L1(J)、K1(J) ----
+			ProcessMLFMM::mexp(Sm_J1, octreeNodes_[maxLevel_], Vsmi, kp_lvl_k1[0], x, 0, maxlvl);
+			ProcessMLFMM::m2m(Sm_J1, octreeNodes_, kp_lvl_k1, interpol_k1, maxlvl, levelSpan, wave.k1());
+			ProcessMLFMM::m2l(Sm_J1, Bm_J1, octreeNodes_, TF, kp_lvl_k1, WGL_k1, WGL_phi_k1, phi_level_k1, maxlvl, levelSpan);
+			ProcessMLFMM::l2l(Bm_J1, octreeNodes_, kp_lvl_k1, phi_level_k1, interpol_k1, maxlvl, levelSpan, wave.k1());
+
+			// ---- Pass 2: k1, M → K1(M)、L1(M) ----
+			ProcessMLFMM::mexp(Sm_M1, octreeNodes_[maxLevel_], Vsmi, kp_lvl_k1[0], x, N, maxlvl);
+			ProcessMLFMM::m2m(Sm_M1, octreeNodes_, kp_lvl_k1, interpol_k1, maxlvl, levelSpan, wave.k1());
+			ProcessMLFMM::m2l(Sm_M1, Bm_M1, octreeNodes_, TF, kp_lvl_k1, WGL_k1, WGL_phi_k1, phi_level_k1, maxlvl, levelSpan);
+			ProcessMLFMM::l2l(Bm_M1, octreeNodes_, kp_lvl_k1, phi_level_k1, interpol_k1, maxlvl, levelSpan, wave.k1());
+
+			// ---- Pass 3: k2, J → L2(J)、K2(J) ----
+			ProcessMLFMM::mexp(Sm_J2, octreeNodes_[maxLevel_], Vsmi2, kp_lvl_k2[0], x, 0, maxlvl);
+			ProcessMLFMM::m2m(Sm_J2, octreeNodes_, kp_lvl_k2, interpol_k2, maxlvl, levelSpan, wave.k2());
+			ProcessMLFMM::m2l(Sm_J2, Bm_J2, octreeNodes_, TF2, kp_lvl_k2, WGL_k2, WGL_phi_k2, phi_level_k2, maxlvl, levelSpan);
+			ProcessMLFMM::l2l(Bm_J2, octreeNodes_, kp_lvl_k2, phi_level_k2, interpol_k2, maxlvl, levelSpan, wave.k2());
+
+			// ---- Pass 4: k2, M → K2(M)、L2(M) ----
+			ProcessMLFMM::mexp(Sm_M2, octreeNodes_[maxLevel_], Vsmi2, kp_lvl_k2[0], x, N, maxlvl);
+			ProcessMLFMM::m2m(Sm_M2, octreeNodes_, kp_lvl_k2, interpol_k2, maxlvl, levelSpan, wave.k2());
+			ProcessMLFMM::m2l(Sm_M2, Bm_M2, octreeNodes_, TF2, kp_lvl_k2, WGL_k2, WGL_phi_k2, phi_level_k2, maxlvl, levelSpan);
+			ProcessMLFMM::l2l(Bm_M2, octreeNodes_, kp_lvl_k2, phi_level_k2, interpol_k2, maxlvl, levelSpan, wave.k2());
+
+			//---- far field ----
+			auto integrateL = [](const std::vector<Complex3D>& V,
+				const std::vector<Complex3D>& B) -> std::complex<double> {
+					std::complex<double> val(0.0, 0.0);
+					const int K = static_cast<int>(V.size());
+					for (int idx = 0; idx < K; ++idx) {
+						val += dot(V[idx], B[idx]);
+					}
+					return val;
+				};
+
+			auto integrateK = [](const std::vector<Complex3D>& V,
+				const std::vector<Complex3D>& B,
+				const std::vector<kp_Point>& kp) -> std::complex<double> {
+					std::complex<double> val(0.0, 0.0);
+					const int K = static_cast<int>(V.size());
+					for (int idx = 0; idx < K; ++idx) {
+						const double khat[3] = { -kp[idx].x, -kp[idx].y, -kp[idx].z };
+
+						Complex3D kCrossV;
+						cross(kCrossV, khat, V[idx]);
+
+						val += dot(kCrossV, B[idx]);
+					}
+					return val;
+				};
+
+			// ---- far field: finest-level disaggregation ----
 			const int finestN = static_cast<int>(octreeNodes_[maxLevel_].size());
+
+#pragma omp parallel for schedule(dynamic)
+			for (int nodeIdx = 0; nodeIdx < finestN; ++nodeIdx) {
+				OCTree::Node* nd = octreeNodes_[maxLevel_][nodeIdx];
+
+				const auto& BJ1 = Bm_J1[finestIdx][nodeIdx];
+				const auto& BM1 = Bm_M1[finestIdx][nodeIdx];
+				const auto& BJ2 = Bm_J2[finestIdx][nodeIdx];
+				const auto& BM2 = Bm_M2[finestIdx][nodeIdx];
+
+				for (int ri = 0; ri < static_cast<int>(nd->rwgIndices.size()); ++ri) {
+					const int rwgid = nd->rwgIndices[ri]->rwgid;
+
+					const auto& V1 = Vfmj[rwgid];
+					const auto& V2 = Vfmj2[rwgid];
+
+					const auto L1J = integrateL(V1, BJ1);
+					const auto K1J = integrateK(V1, BJ1, kp_lvl_k1[0]);
+					const auto K1M = integrateK(V1, BM1, kp_lvl_k1[0]);
+					const auto L1M = integrateL(V1, BM1);
+
+					const auto L2J = integrateL(V2, BJ2);
+					const auto K2J = integrateK(V2, BJ2, kp_lvl_k2[0]);
+					const auto K2M = integrateK(V2, BM2, kp_lvl_k2[0]);
+					const auto L2M = integrateL(V2, BM2);
+
+					w[rwgid] += const1 * L1J;
+					w[rwgid] += -const1 * K1M;
+
+					w[N + rwgid] += const1 * K1J;
+					w[N + rwgid] += const1 * L1M;
+
+					w[rwgid] += const2 * etai * L2J;
+					w[rwgid] += -const2 * K2M;
+
+					w[N + rwgid] += const2 * K2J;
+					w[N + rwgid] += const2 * L2M / etai;
+				}
+			}
+
+			// ---- near field ----
 #pragma omp parallel for schedule(dynamic)
 			for (int nodeIdx = 0; nodeIdx < finestN; ++nodeIdx) {
 				OCTree::Node* nd = octreeNodes_[maxLevel_][nodeIdx];
