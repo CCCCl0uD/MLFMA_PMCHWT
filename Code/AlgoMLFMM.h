@@ -10,16 +10,116 @@
 #include <thread>
 #include <iostream>
 #include <iomanip>
-#include <boost/math/special_functions/legendre.hpp>
 
 #include "OverloadAlgo.h"
 #include "OCTree.h"
 #include "Bessel.h"
 
 namespace AlgoMLFMM {
-	// 1. 勒让德多项式参数（内积）
-	inline double legendrePolynomialParameters(double r[3], double kp[3]) {
-		return r[0] * kp[0] + r[1] * kp[1] + r[2] * kp[2];
+	inline void computeBase_MLFMM(
+		const std::vector<std::vector<OCTree::Node*>>& octreeNodes,
+		const EMSource& wave, const int integralEquType_,
+		int maxLevel_, int rwgSize, int& L_k1, int& L_k2, int& row, int& levelSpan,
+		std::vector<std::vector<double>>& WGL_k1, std::vector<std::vector<double>>& WGL_k2,
+		std::vector<double>& WGL_phi_k1, std::vector<double>& WGL_phi_k2,
+		std::vector<std::vector<double>>& theta_level_k1, std::vector<std::vector<double>>& theta_level_k2,
+		std::vector<std::vector<double>>& phi_level_k1, std::vector<std::vector<double>>& phi_level_k2,
+		std::vector<std::vector<kp_Point>>& kp_lvl_k1, std::vector<std::vector<kp_Point>>& kp_lvl_k2)
+	{
+		const double highLevelLen = octreeNodes[maxLevel_][0]->cubeLength;
+
+		double D_ = std::sqrt(3.0) * highLevelLen;
+		L_k1 = static_cast<int>(std::ceil(wave.k1_abs() * D_ + 6.0 * std::cbrt(wave.k1_abs() * D_)));
+
+		row = rwgSize;
+		levelSpan = maxLevel_ - 1;
+
+		// 局部临时变量
+		std::vector<double> XGL_temp, WGL_temp;
+		std::vector<double> theta, phi;
+		std::vector<std::vector<double>> XGL_local;
+
+		for (int i = 0; i < levelSpan; i++) {
+			int n = (1 << i) * L_k1;
+			my_math::gauss_legendre(n, XGL_temp, WGL_temp);
+			XGL_local.push_back(XGL_temp);
+			WGL_k1.push_back(WGL_temp);
+			XGL_temp.clear();
+			WGL_temp.clear();
+		}
+
+		for (int i = 0; i < levelSpan; i++) {
+			theta.clear();
+			phi.clear();
+
+			for (int j = static_cast<int>(WGL_k1[i].size()) - 1; j >= 0; j--) {
+				double xGL = XGL_local[i][j];  // 原来从 XGL 读取，但 XGL 与 WGL 尺寸相同，且只在 theta 计算中用于取节点位置
+				theta.push_back(std::acos(xGL));
+			}
+			theta_level_k1.push_back(theta);
+
+			for (int j = 0; j < (1 << (i + 1)) * L_k1; ++j) {
+				if (j == 0) {
+					WGL_phi_k1.push_back(Pi / ((1 << i) * L_k1));
+				}
+				phi.push_back(j * Pi / ((1 << i) * L_k1) + 0.5 * Pi / ((1 << i) * L_k1));
+			}
+			phi_level_k1.push_back(phi);
+
+			std::vector<kp_Point> current_lvl_kp;
+			for (int j = 0; j < static_cast<int>(theta.size()); ++j) {
+				for (int k = 0; k < static_cast<int>(phi.size()); ++k) {
+					double kx = std::sin(theta_level_k1[i][j]) * std::cos(phi_level_k1[i][k]);
+					double ky = std::sin(theta_level_k1[i][j]) * std::sin(phi_level_k1[i][k]);
+					double kz = std::cos(theta_level_k1[i][j]);
+					current_lvl_kp.emplace_back(kx, ky, kz);
+				}
+			}
+			kp_lvl_k1.push_back(current_lvl_kp);
+		}
+
+		if (integralEquType_ == 2) {
+			L_k2 = static_cast<int>(std::ceil(wave.k2_abs() * D_ + 6.0 * std::cbrt(wave.k2_abs() * D_)));
+
+			for (int i = 0; i < levelSpan; i++) {
+				int n = (1 << i) * L_k2;
+				my_math::gauss_legendre(n, XGL_temp, WGL_temp);
+				XGL_local.push_back(XGL_temp);
+				WGL_k2.push_back(WGL_temp);
+				XGL_temp.clear();
+				WGL_temp.clear();
+			}
+
+			for (int i = 0; i < levelSpan; i++) {
+				theta.clear();
+				phi.clear();
+
+				for (int j = static_cast<int>(WGL_k2[i].size()) - 1; j >= 0; j--) {
+					double xGL = XGL_local[i + levelSpan][j];  // 原来从 XGL 读取，但 XGL 与 WGL 尺寸相同，且只在 theta 计算中用于取节点位置
+					theta.push_back(std::acos(xGL));
+				}
+				theta_level_k2.push_back(theta);
+
+				for (int j = 0; j < (1 << (i + 1)) * L_k2; ++j) {
+					if (j == 0) {
+						WGL_phi_k2.push_back(Pi / ((1 << i) * L_k2));
+					}
+					phi.push_back(j * Pi / ((1 << i) * L_k2) + 0.5 * Pi / ((1 << i) * L_k2));
+				}
+				phi_level_k2.push_back(phi);
+
+				std::vector<kp_Point> current_lvl_kp;
+				for (int j = 0; j < static_cast<int>(theta.size()); ++j) {
+					for (int k = 0; k < static_cast<int>(phi.size()); ++k) {
+						double kx = std::sin(theta_level_k2[i][j]) * std::cos(phi_level_k2[i][k]);
+						double ky = std::sin(theta_level_k2[i][j]) * std::sin(phi_level_k2[i][k]);
+						double kz = std::cos(theta_level_k2[i][j]);
+						current_lvl_kp.emplace_back(kx, ky, kz);
+					}
+				}
+				kp_lvl_k2.push_back(current_lvl_kp);
+			}
+		}
 	}
 
 	// 2. 插值位置查找（二分搜索）
@@ -136,7 +236,7 @@ namespace AlgoMLFMM {
 					octreeNodesDRvec[level][vec].z
 				};
 				double Rpq = std::sqrt(r[0] * r[0] + r[1] * r[1] + r[2] * r[2]);
-				normalize(r, Rpq);
+				my_math::normalize(r, Rpq);
 
 				std::complex<double> kR = k_wavenumber * Rpq;
 				std::vector<std::complex<double>> h2_array;
@@ -148,12 +248,12 @@ namespace AlgoMLFMM {
 					double kp[3] = {
 						kpLevel[kpNum].x, kpLevel[kpNum].y, kpLevel[kpNum].z
 					};
-					double r_dot_kp = legendrePolynomialParameters(r, kp);
+					double r_dot_kp = my_math::legendrePolynomialParameters(r, kp);
 
 					std::complex<double> sum(0.0, 0.0);
 					for (int l = 0; l <= L; ++l) {
 						double p = boost::math::legendre_p(l, r_dot_kp);
-						auto jl = jl_table[l & 3];
+						auto jl = my_math::jl_table[l & 3];
 						sum += jl * h2_array[l] * (2.0 * l + 1.0) * p;
 					}
 					TF[level][vec][kpNum] = sum;
@@ -206,9 +306,9 @@ namespace AlgoMLFMM {
 					int th1_base = theta_idx[0] * psn;
 					int th2_base = theta_idx[1] * psn;
 					int th3_base = theta_idx[2] * psn;
-					double l1T = lagrangeWeight(theta0, theta_vals[0], theta_vals[1], theta_vals[2]);
-					double l2T = lagrangeWeight(theta0, theta_vals[1], theta_vals[0], theta_vals[2]);
-					double l3T = lagrangeWeight(theta0, theta_vals[2], theta_vals[0], theta_vals[1]);
+					double l1T = my_math::lagrangeWeight(theta0, theta_vals[0], theta_vals[1], theta_vals[2]);
+					double l2T = my_math::lagrangeWeight(theta0, theta_vals[1], theta_vals[0], theta_vals[2]);
+					double l3T = my_math::lagrangeWeight(theta0, theta_vals[2], theta_vals[0], theta_vals[1]);
 					double phi0 = phi_level[revF][p];
 					auto phi_idx = find_interp_pos(phi0, phi_level[revS], true);
 					double phi_vals[3] = {
@@ -216,9 +316,9 @@ namespace AlgoMLFMM {
 						phi_level[revS][phi_idx[1]],
 						phi_level[revS][phi_idx[2]]
 					};
-					double l1P = lagrangeWeight(phi0, phi_vals[0], phi_vals[1], phi_vals[2]);
-					double l2P = lagrangeWeight(phi0, phi_vals[1], phi_vals[0], phi_vals[2]);
-					double l3P = lagrangeWeight(phi0, phi_vals[2], phi_vals[0], phi_vals[1]);
+					double l1P = my_math::lagrangeWeight(phi0, phi_vals[0], phi_vals[1], phi_vals[2]);
+					double l2P = my_math::lagrangeWeight(phi0, phi_vals[1], phi_vals[0], phi_vals[2]);
+					double l3P = my_math::lagrangeWeight(phi0, phi_vals[2], phi_vals[0], phi_vals[1]);
 					int idx = t * pfn + p;
 					std::array<double, 9> weight = {
 						l1T * l1P, l1T * l2P, l1T * l3P,

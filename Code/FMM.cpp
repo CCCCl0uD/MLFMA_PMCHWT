@@ -1,12 +1,12 @@
 // FMM.cpp
 #include "FMM.h"
 #include "AlgoFMM.h"
-#include "GMRES.h"
-#include "CGS.h"
 #include "ProcessFMM.h"
 #include "Zmartix.h"
 #include "Vm.h"
 #include "RCS.h"
+#include "GMRES.h"
+#include "CGS.h"
 
 FMM::FMM(const RCSExportConfig& cfg, const int selectIntegralEqu, const int selectMatrixSolver, const std::string selectMono_Dual, const std::string pol_wave,
 	const std::vector<std::vector<OCTree::Node*>>& octreeNodes,
@@ -16,7 +16,7 @@ FMM::FMM(const RCSExportConfig& cfg, const int selectIntegralEqu, const int sele
 {
 	// Compute base data: k, top level theta, L, levelSpan
 	// Compute Vsmi/Vfmj matrices theta/phi angles and weights from maxLevel_ down to level 2
-	AlgoFMM::computeBase(octreeNodes_, wave, integralEquType_, maxLevel_, static_cast<int>(rwgs.size()), L_k1, L_k2, row, levelSpan,
+	AlgoFMM::computeBase_FMM(octreeNodes_, wave, integralEquType_, maxLevel_, static_cast<int>(rwgs.size()), L_k1, L_k2, row, levelSpan,
 		WGL_k1, WGL_k2, WGL_phi_k1, WGL_phi_k2, theta_level_k1, theta_level_k2, phi_level_k1, phi_level_k2, kp_lvl_k1, kp_lvl_k2);
 
 	if (integralEquType_ != 2) {
@@ -96,17 +96,17 @@ FMM::FMM(const RCSExportConfig& cfg, const int selectIntegralEqu, const int sele
 }
 
 size_t FMM::computeMem() {
-	size_t memBase = memory2D<kp_Point>(kp_lvl_k1) + memory2D<double>(theta_level_k1) + memory2D<double>(phi_level_k1) +
-		memory2D<double>(WGL_k1) + memory1D<double>(WGL_phi_k1);
-	size_t memVsmi = memory2D<Complex3D>(Vsmi) + memory2D<Complex3D>(Vfmj);
-	size_t memZ = memory2D<std::complex<double>>(Z_near) + memory2D<int>(Z_near_id);
-	size_t memTF = memory2D<std::complex<double>>(TF_fmm);
-	size_t memSmBm = memory2D<Complex3D>(Sm_fmm) + memory2D<Complex3D>(Bm_fmm);
+	size_t memBase = my_memory::memory2D<kp_Point>(kp_lvl_k1) + my_memory::memory2D<double>(theta_level_k1) + my_memory::memory2D<double>(phi_level_k1) +
+		my_memory::memory2D<double>(WGL_k1) + my_memory::memory1D<double>(WGL_phi_k1);
+	size_t memVsmi = my_memory::memory2D<Complex3D>(Vsmi) + my_memory::memory2D<Complex3D>(Vfmj);
+	size_t memZ = my_memory::memory2D<std::complex<double>>(Z_near) + my_memory::memory2D<int>(Z_near_id);
+	size_t memTF = my_memory::memory2D<std::complex<double>>(TF_fmm);
+	size_t memSmBm = my_memory::memory2D<Complex3D>(Sm_fmm) + my_memory::memory2D<Complex3D>(Bm_fmm);
 	if (integralEquType_ == 2) {
-		memBase += memory2D<kp_Point>(kp_lvl_k2) + memory2D<double>(theta_level_k2) + memory2D<double>(phi_level_k2) +
-			memory2D<double>(WGL_k2) + memory1D<double>(WGL_phi_k2);
-		memVsmi += memory2D<Complex3D>(Vsmi2) + memory2D<Complex3D>(Vfmj2);
-		memTF += memory2D<std::complex<double>>(TF_fmm2);
+		memBase += my_memory::memory2D<kp_Point>(kp_lvl_k2) + my_memory::memory2D<double>(theta_level_k2) + my_memory::memory2D<double>(phi_level_k2) +
+			my_memory::memory2D<double>(WGL_k2) + my_memory::memory1D<double>(WGL_phi_k2);
+		memVsmi += my_memory::memory2D<Complex3D>(Vsmi2) + my_memory::memory2D<Complex3D>(Vfmj2);
+		memTF += my_memory::memory2D<std::complex<double>>(TF_fmm2);
 	}
 	return memBase + memVsmi + memZ + memTF + memSmBm;
 }

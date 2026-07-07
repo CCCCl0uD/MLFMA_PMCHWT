@@ -11,7 +11,6 @@
 #include <thread>
 #include <unordered_set>
 #include <vector>
-#include <boost/math/special_functions/legendre.hpp>
 
 #include "Bessel.h"
 #include "OverloadAlgo.h"
@@ -19,38 +18,109 @@
 #include "OCTree.h"
 
 namespace AlgoFMM {
-	// 牛顿-拉夫逊方法来寻找勒让德多项式的根
-	inline double newton_raphson(int n, double x0, double tolerance, int max_iter) {
-		double x = x0;
-		for (int i = 0; i < max_iter; ++i) {
-			double p = boost::math::legendre_p(n, x);
-			double dp = boost::math::legendre_p_prime(n, x);
-			double dx = p / dp;
-			x -= dx;
-			if (std::abs(dx) < tolerance) {
-				break;
-			}
+	inline void computeBase_FMM(
+		const std::vector<std::vector<OCTree::Node*>>& octreeNodes,
+		const EMSource& wave, const int integralEquType_,
+		int maxLevel_, int rwgSize, int& L_k1, int& L_k2, int& row, int& levelSpan,
+		std::vector<std::vector<double>>& WGL_k1, std::vector<std::vector<double>>& WGL_k2,
+		std::vector<double>& WGL_phi_k1, std::vector<double>& WGL_phi_k2,
+		std::vector<std::vector<double>>& theta_level_k1, std::vector<std::vector<double>>& theta_level_k2,
+		std::vector<std::vector<double>>& phi_level_k1, std::vector<std::vector<double>>& phi_level_k2,
+		std::vector<std::vector<kp_Point>>& kp_lvl_k1, std::vector<std::vector<kp_Point>>& kp_lvl_k2)
+	{
+		const double highLevelLen = octreeNodes[maxLevel_][0]->cubeLength;
+
+		double D_ = std::sqrt(3.0) * highLevelLen;
+		L_k1 = static_cast<int>(std::ceil(wave.k1_abs() * D_ + 6.0 * std::cbrt(wave.k1_abs() * D_)));
+
+		row = rwgSize;
+		levelSpan = maxLevel_ - 1;
+
+		// 局部临时变量
+		std::vector<double> XGL_temp, WGL_temp;
+		std::vector<double> theta, phi;
+		std::vector<std::vector<double>> XGL_local;
+
+		for (int i = 0; i < levelSpan; i++) {
+			int n = (1 << i) * L_k1;
+			my_math::gauss_legendre(n, XGL_temp, WGL_temp);
+			XGL_local.push_back(XGL_temp);
+			WGL_k1.push_back(WGL_temp);
+			XGL_temp.clear();
+			WGL_temp.clear();
 		}
-		return x;
-	}
 
-	// 计算n点高斯-勒让德积分的节点和权重
-	inline void gauss_legendre(int n, std::vector<double>& XGL_temp, std::vector<double>& WGL_temp) {
-		XGL_temp.resize(n);
-		WGL_temp.resize(n);
-		const double tolerance = 1e-10;
-		const int max_iter = 100;
-		for (int i = 0; i < (n + 1) / 2; ++i) {
-			// 初始猜测值
-			double x0 = std::cos(Pi * (i + 0.75) / (n + 0.5));
-			double root = newton_raphson(n, x0, tolerance, max_iter);
-			XGL_temp[i] = -root;
-			XGL_temp[n - i - 1] = root;
+		for (int i = 0; i < levelSpan; i++) {
+			theta.clear();
+			phi.clear();
 
-			double dp = boost::math::legendre_p_prime(n, root);
-			double weight = 2.0 / ((1 - root * root) * dp * dp);
-			WGL_temp[i] = weight;
-			WGL_temp[n - i - 1] = weight;
+			for (int j = static_cast<int>(WGL_k1[i].size()) - 1; j >= 0; j--) {
+				double xGL = XGL_local[i][j];  // 原来从 XGL 读取，但 XGL 与 WGL 尺寸相同，且只在 theta 计算中用于取节点位置
+				theta.push_back(std::acos(xGL));
+			}
+			theta_level_k1.push_back(theta);
+
+			for (int j = 0; j < (1 << (i + 1)) * L_k1; ++j) {
+				if (j == 0) {
+					WGL_phi_k1.push_back(Pi / ((1 << i) * L_k1));
+				}
+				phi.push_back(j * Pi / ((1 << i) * L_k1) + 0.5 * Pi / ((1 << i) * L_k1));
+			}
+			phi_level_k1.push_back(phi);
+
+			std::vector<kp_Point> current_lvl_kp;
+			for (int j = 0; j < static_cast<int>(theta.size()); ++j) {
+				for (int k = 0; k < static_cast<int>(phi.size()); ++k) {
+					double kx = std::sin(theta_level_k1[i][j]) * std::cos(phi_level_k1[i][k]);
+					double ky = std::sin(theta_level_k1[i][j]) * std::sin(phi_level_k1[i][k]);
+					double kz = std::cos(theta_level_k1[i][j]);
+					current_lvl_kp.emplace_back(kx, ky, kz);
+				}
+			}
+			kp_lvl_k1.push_back(current_lvl_kp);
+		}
+
+		if (integralEquType_ == 2) {
+			L_k2 = static_cast<int>(std::ceil(wave.k2_abs() * D_ + 6.0 * std::cbrt(wave.k2_abs() * D_)));
+
+			for (int i = 0; i < levelSpan; i++) {
+				int n = (1 << i) * L_k2;
+				my_math::gauss_legendre(n, XGL_temp, WGL_temp);
+				XGL_local.push_back(XGL_temp);
+				WGL_k2.push_back(WGL_temp);
+				XGL_temp.clear();
+				WGL_temp.clear();
+			}
+
+			for (int i = 0; i < levelSpan; i++) {
+				theta.clear();
+				phi.clear();
+
+				for (int j = static_cast<int>(WGL_k2[i].size()) - 1; j >= 0; j--) {
+					double xGL = XGL_local[i + levelSpan][j];  // 原来从 XGL 读取，但 XGL 与 WGL 尺寸相同，且只在 theta 计算中用于取节点位置
+					theta.push_back(std::acos(xGL));
+				}
+				theta_level_k2.push_back(theta);
+
+				for (int j = 0; j < (1 << (i + 1)) * L_k2; ++j) {
+					if (j == 0) {
+						WGL_phi_k2.push_back(Pi / ((1 << i) * L_k2));
+					}
+					phi.push_back(j * Pi / ((1 << i) * L_k2) + 0.5 * Pi / ((1 << i) * L_k2));
+				}
+				phi_level_k2.push_back(phi);
+
+				std::vector<kp_Point> current_lvl_kp;
+				for (int j = 0; j < static_cast<int>(theta.size()); ++j) {
+					for (int k = 0; k < static_cast<int>(phi.size()); ++k) {
+						double kx = std::sin(theta_level_k2[i][j]) * std::cos(phi_level_k2[i][k]);
+						double ky = std::sin(theta_level_k2[i][j]) * std::sin(phi_level_k2[i][k]);
+						double kz = std::cos(theta_level_k2[i][j]);
+						current_lvl_kp.emplace_back(kx, ky, kz);
+					}
+				}
+				kp_lvl_k2.push_back(current_lvl_kp);
+			}
 		}
 	}
 
@@ -183,7 +253,7 @@ namespace AlgoFMM {
 					farVec[nodeFarIdx].z
 				};
 				double Rpq = std::sqrt(r[0] * r[0] + r[1] * r[1] + r[2] * r[2]);
-				normalize(r, Rpq);
+				my_math::normalize(r, Rpq);
 
 				std::complex<double> kR = k_ * Rpq;
 
@@ -202,7 +272,7 @@ namespace AlgoFMM {
 
 					for (int l = 0; l <= L; ++l) {
 						double p = boost::math::legendre_p(l, r_dot_kp);
-						std::complex<double> jl = jl_table[l & 3];
+						std::complex<double> jl = my_math::jl_table[l & 3];
 						TF_fmm[nodeFarIdx][kpNum] += jl * h2_array[l] * (2.0 * l + 1.0) * p;
 					}
 				}
@@ -215,112 +285,6 @@ namespace AlgoFMM {
 		auto t_elapsed = std::chrono::duration_cast<std::chrono::microseconds>(t_end - t_start);
 		std::cout << "\nInfo: Transfer factor calculation done, elapsed: "
 			<< t_elapsed.count() / 1000.0 << " ms (AlgoFMM.h)\n";
-	}
-
-	inline void computeBase(
-		const std::vector<std::vector<OCTree::Node*>>& octreeNodes,
-		const EMSource& wave, const int integralEquType_,
-		int maxLevel_, int rwgSize, int& L_k1, int& L_k2, int& row, int& levelSpan,
-		std::vector<std::vector<double>>& WGL_k1, std::vector<std::vector<double>>& WGL_k2,
-		std::vector<double>& WGL_phi_k1, std::vector<double>& WGL_phi_k2,
-		std::vector<std::vector<double>>& theta_level_k1, std::vector<std::vector<double>>& theta_level_k2,
-		std::vector<std::vector<double>>& phi_level_k1, std::vector<std::vector<double>>& phi_level_k2,
-		std::vector<std::vector<kp_Point>>& kp_lvl_k1, std::vector<std::vector<kp_Point>>& kp_lvl_k2)
-	{
-		const double highLevelLen = octreeNodes[maxLevel_][0]->cubeLength;
-
-		double D_ = std::sqrt(3.0) * highLevelLen;
-		L_k1 = static_cast<int>(std::ceil(wave.k1_abs() * D_ + 6.0 * std::cbrt(wave.k1_abs() * D_)));
-
-		row = rwgSize;
-		levelSpan = maxLevel_ - 1;
-
-		// 局部临时变量
-		std::vector<double> XGL_temp, WGL_temp;
-		std::vector<double> theta, phi;
-		std::vector<std::vector<double>> XGL_local;
-
-		for (int i = 0; i < levelSpan; i++) {
-			int n = (1 << i) * L_k1;
-			AlgoFMM::gauss_legendre(n, XGL_temp, WGL_temp);
-			XGL_local.push_back(XGL_temp);
-			WGL_k1.push_back(WGL_temp);
-			XGL_temp.clear();
-			WGL_temp.clear();
-		}
-
-		for (int i = 0; i < levelSpan; i++) {
-			theta.clear();
-			phi.clear();
-
-			for (int j = static_cast<int>(WGL_k1[i].size()) - 1; j >= 0; j--) {
-				double xGL = XGL_local[i][j];  // 原来从 XGL 读取，但 XGL 与 WGL 尺寸相同，且只在 theta 计算中用于取节点位置
-				theta.push_back(std::acos(xGL));
-			}
-			theta_level_k1.push_back(theta);
-
-			for (int j = 0; j < (1 << (i + 1)) * L_k1; ++j) {
-				if (j == 0) {
-					WGL_phi_k1.push_back(Pi / ((1 << i) * L_k1));
-				}
-				phi.push_back(j * Pi / ((1 << i) * L_k1) + 0.5 * Pi / ((1 << i) * L_k1));
-			}
-			phi_level_k1.push_back(phi);
-
-			std::vector<kp_Point> current_lvl_kp;
-			for (int j = 0; j < static_cast<int>(theta.size()); ++j) {
-				for (int k = 0; k < static_cast<int>(phi.size()); ++k) {
-					double kx = std::sin(theta_level_k1[i][j]) * std::cos(phi_level_k1[i][k]);
-					double ky = std::sin(theta_level_k1[i][j]) * std::sin(phi_level_k1[i][k]);
-					double kz = std::cos(theta_level_k1[i][j]);
-					current_lvl_kp.emplace_back(kx, ky, kz);
-				}
-			}
-			kp_lvl_k1.push_back(current_lvl_kp);
-		}
-
-		if (integralEquType_ == 2) {
-			L_k2 = static_cast<int>(std::ceil(wave.k2_abs() * D_ + 6.0 * std::cbrt(wave.k2_abs() * D_)));
-
-			for (int i = 0; i < levelSpan; i++) {
-				int n = (1 << i) * L_k2;
-				AlgoFMM::gauss_legendre(n, XGL_temp, WGL_temp);
-				XGL_local.push_back(XGL_temp);
-				WGL_k2.push_back(WGL_temp);
-				XGL_temp.clear();
-				WGL_temp.clear();
-			}
-
-			for (int i = 0; i < levelSpan; i++) {
-				theta.clear();
-				phi.clear();
-
-				for (int j = static_cast<int>(WGL_k2[i].size()) - 1; j >= 0; j--) {
-					double xGL = XGL_local[i + levelSpan][j];  // 原来从 XGL 读取，但 XGL 与 WGL 尺寸相同，且只在 theta 计算中用于取节点位置
-					theta.push_back(std::acos(xGL));
-				}
-				theta_level_k2.push_back(theta);
-
-				for (int j = 0; j < (1 << (i + 1)) * L_k2; ++j) {
-					if (j == 0) {
-						WGL_phi_k2.push_back(Pi / ((1 << i) * L_k2));
-					}
-					phi.push_back(j * Pi / ((1 << i) * L_k2) + 0.5 * Pi / ((1 << i) * L_k2));
-				}
-				phi_level_k2.push_back(phi);
-
-				std::vector<kp_Point> current_lvl_kp;
-				for (int j = 0; j < static_cast<int>(theta.size()); ++j) {
-					for (int k = 0; k < static_cast<int>(phi.size()); ++k) {
-						double kx = std::sin(theta_level_k2[i][j]) * std::cos(phi_level_k2[i][k]);
-						double ky = std::sin(theta_level_k2[i][j]) * std::sin(phi_level_k2[i][k]);
-						double kz = std::cos(theta_level_k2[i][j]);
-						current_lvl_kp.emplace_back(kx, ky, kz);
-					}
-				}
-				kp_lvl_k2.push_back(current_lvl_kp);
-			}
-		}
 	}
 }// namespace AlgoFMM
 

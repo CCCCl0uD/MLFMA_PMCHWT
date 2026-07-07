@@ -22,7 +22,7 @@ MLFMM::MLFMM(
 {
 	// Compute base data: k, top level theta, L, levelSpan
 	// Compute Vsmi/Vfmj matrices theta/phi angles and weights from maxLevel_ down to level 2
-	AlgoFMM::computeBase(octreeNodes_, wave, integralEquType_, maxLevel_, static_cast<int>(rwgs.size()), L_k1, L_k2, row, levelSpan,
+	AlgoMLFMM::computeBase_MLFMM(octreeNodes_, wave, integralEquType_, maxLevel_, static_cast<int>(rwgs.size()), L_k1, L_k2, row, levelSpan,
 		WGL_k1, WGL_k2, WGL_phi_k1, WGL_phi_k2, theta_level_k1, theta_level_k2, phi_level_k1, phi_level_k2, kp_lvl_k1, kp_lvl_k2);
 
 	if (integralEquType_ != 2) {
@@ -161,24 +161,24 @@ void MLFMM::initDIEWorkspace() {
 }
 
 size_t MLFMM::computeMem() {
-	size_t memBase = memory2D<kp_Point>(kp_lvl_k1) + memory2D<double>(theta_level_k1) + memory2D<double>(phi_level_k1) +
-		memory2D<double>(WGL_k1) + memory1D<double>(WGL_phi_k1);
-	size_t memVsmi_Vfmi = memory2D<Complex3D>(Vsmi) + memory2D<Complex3D>(Vfmj);
-	size_t memTF = memory3D<std::complex<double>>(TF);
-	size_t memZ_near = memory2D<std::complex<double>>(Z_near);
-	size_t memInterp = memory2D<InterpData>(interpol_k1);
-	size_t memSm_Bm = memory3D<Complex3D>(Sm) + memory3D<Complex3D>(Bm);
-	size_t memV = memory1D<std::complex<double>>(Vm);
+	size_t memBase = my_memory::memory2D<kp_Point>(kp_lvl_k1) + my_memory::memory2D<double>(theta_level_k1) + my_memory::memory2D<double>(phi_level_k1) +
+		my_memory::memory2D<double>(WGL_k1) + my_memory::memory1D<double>(WGL_phi_k1);
+	size_t memVsmi_Vfmi = my_memory::memory2D<Complex3D>(Vsmi) + my_memory::memory2D<Complex3D>(Vfmj);
+	size_t memTF = my_memory::memory3D<std::complex<double>>(TF);
+	size_t memZ_near = my_memory::memory2D<std::complex<double>>(Z_near);
+	size_t memInterp = my_memory::memory2D<InterpData>(interpol_k1);
+	size_t memSm_Bm = my_memory::memory3D<Complex3D>(Sm) + my_memory::memory3D<Complex3D>(Bm);
+	size_t memV = my_memory::memory1D<std::complex<double>>(Vm);
 	if (integralEquType_ == 2) {
-		memBase += memory2D<kp_Point>(kp_lvl_k2) + memory2D<double>(theta_level_k2) + memory2D<double>(phi_level_k2) +
-			memory2D<double>(WGL_k2) + memory1D<double>(WGL_phi_k2);
-		memVsmi_Vfmi += memory2D<Complex3D>(Vsmi2) + memory2D<Complex3D>(Vfmj2);
-		memTF += memory3D<std::complex<double>>(TF2);
-		memInterp += memory2D<InterpData>(interpol_k2);
-		memSm_Bm += memory3D<Complex3D>(Sm_J1) + memory3D<Complex3D>(Bm_J1)
-			+ memory3D<Complex3D>(Sm_M1) + memory3D<Complex3D>(Bm_M1)
-			+ memory3D<Complex3D>(Sm_J2) + memory3D<Complex3D>(Bm_J2)
-			+ memory3D<Complex3D>(Sm_M2) + memory3D<Complex3D>(Bm_M2);
+		memBase += my_memory::memory2D<kp_Point>(kp_lvl_k2) + my_memory::memory2D<double>(theta_level_k2) + my_memory::memory2D<double>(phi_level_k2) +
+			my_memory::memory2D<double>(WGL_k2) + my_memory::memory1D<double>(WGL_phi_k2);
+		memVsmi_Vfmi += my_memory::memory2D<Complex3D>(Vsmi2) + my_memory::memory2D<Complex3D>(Vfmj2);
+		memTF += my_memory::memory3D<std::complex<double>>(TF2);
+		memInterp += my_memory::memory2D<InterpData>(interpol_k2);
+		memSm_Bm += my_memory::memory3D<Complex3D>(Sm_J1) + my_memory::memory3D<Complex3D>(Bm_J1)
+			+ my_memory::memory3D<Complex3D>(Sm_M1) + my_memory::memory3D<Complex3D>(Bm_M1)
+			+ my_memory::memory3D<Complex3D>(Sm_J2) + my_memory::memory3D<Complex3D>(Bm_J2)
+			+ my_memory::memory3D<Complex3D>(Sm_M2) + my_memory::memory3D<Complex3D>(Bm_M2);
 	}
 	return memBase + memVsmi_Vfmi + memTF + memZ_near + memInterp + memSm_Bm + memV;
 }
