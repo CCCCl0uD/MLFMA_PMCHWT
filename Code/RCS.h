@@ -82,7 +82,7 @@ namespace RCSUtils {
 				std::complex<double> phase = k_ * (pos[0] * r[0] + pos[1] * r[1] + pos[2] * r[2]);
 				std::complex<double> e_ = exp(J * phase);
 				std::array<std::complex<double>, 3> F_pos;
-				computeTensorDotVector(F_pos, r, rho);
+				my_math::computeTensorDotVector(F_pos, r, rho);
 				F_temp[0] += ln * wf * F_pos[0] * e_;
 				F_temp[1] += ln * wf * F_pos[1] * e_;
 				F_temp[2] += ln * wf * F_pos[2] * e_;
@@ -101,7 +101,7 @@ namespace RCSUtils {
 				phase = k_ * (neg[0] * r[0] + neg[1] * r[1] + neg[2] * r[2]);
 				e_ = exp(J * phase);
 				std::array<std::complex<double>, 3> F_neg;
-				computeTensorDotVector(F_neg, r, rho);
+				my_math::computeTensorDotVector(F_neg, r, rho);
 				F_temp[0] += ln * wf * F_neg[0] * e_;
 				F_temp[1] += ln * wf * F_neg[1] * e_;
 				F_temp[2] += ln * wf * F_neg[2] * e_;
@@ -148,7 +148,7 @@ namespace RCSUtils {
 				std::complex<double> e_k1 = exp(J * phase1);
 
 				std::array<std::complex<double>, 3> Fp;
-				computeTensorDotVector(Fp, r, rho);
+				my_math::computeTensorDotVector(Fp, r, rho);
 				F_J[0] += ln * wf * Fp[0] * e_k1;
 				F_J[1] += ln * wf * Fp[1] * e_k1;
 				F_J[2] += ln * wf * Fp[2] * e_k1;
@@ -172,7 +172,7 @@ namespace RCSUtils {
 				phase1 = k1 * (neg[0] * r[0] + neg[1] * r[1] + neg[2] * r[2]);
 				e_k1 = exp(J * phase1);
 
-				computeTensorDotVector(Fp, r, rho);
+				my_math::computeTensorDotVector(Fp, r, rho);
 				F_J[0] += ln * wf * Fp[0] * e_k1;
 				F_J[1] += ln * wf * Fp[1] * e_k1;
 				F_J[2] += ln * wf * Fp[2] * e_k1;

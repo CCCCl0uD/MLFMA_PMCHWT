@@ -81,8 +81,8 @@ void MoM::exportZ(const RCSExportConfig& cfg) {
 }
 
 size_t MoM::computeMem() {
-	size_t memZ_mom = memory2D<std::complex<double>>(Z_mom);
-	size_t memV = memory1D<std::complex<double>>(Vm);
+	size_t memZ_mom = my_memory::memory2D<std::complex<double>>(Z_mom);
+	size_t memV = my_memory::memory1D<std::complex<double>>(Vm);
 	return memZ_mom + memV;
 }
 
