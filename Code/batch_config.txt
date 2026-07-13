@@ -1,16 +1,16 @@
 # MLFMA 批量仿真配置文件
 # 行首 # 为注释
-# .\MLFMA.exe batch D:\MyCode\C++\MLFMA\Code\batch_config.txt
+# .\MLFMA.exe batch D:\MyCode\MLFMA_PMCHWT-main\MLFMA_PMCHWT-main\Code\batch_config.txt
 
 # ============ 网格文件（分号分隔多个路径） ============
-nas_files = D:\MyCode\C++\MLFMA\DATA\Sphere_1e9\Sphere_1e9.nas
+nas_files = D:\MyCode\PMCHWT_MLFMA\DATA\Cube_0d5m_Die_1e9\Cube_0d5m_Die_1e9.nas
 
 # ============ 频率列表 (Hz)，逗号分隔 ============
 frequencies = 1.0e9
 
 # ============ 入射角度 ============
 # 方式1：直接列出 theta:phi 对（逗号分隔）
-incident_angles = 90:0, 60:0, 45:0, 30:0
+incident_angles = 90:0
 
 # 方式2：theta 范围扫描（start:end:step），phi 固定为 0
 # incident_theta_range = 0:180:10
@@ -28,18 +28,17 @@ step = 1
 algorithm = 2
 
 # integral_equation: 0 = EFIE, 1 = CFIE, 2 = PMCHWT
-integral_equation = 1
+integral_equation = 2
 
 # matrix_solver: 0 = GMRES, 1 = CGS
-matrix_solver = 1
+matrix_solver = 0
 
 mono_dual = dual
 gauss_points = 7
 omp_threads = 14
 
 # ============ 介质参数（仅 PMCHWT 时有效） ============
-# epsilon_r = 4.0, -0.001
-# mu_r = 1.0，0.0
+material_list = 2.25,-0.0225,1.0,0.0;4.0,-0.08,1.0,0.0;10.0,-0.50,1.0,0.0
 
 # ============ 并行线程数 ============
 # omp_threads = 14

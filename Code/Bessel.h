@@ -22,6 +22,29 @@ namespace Bessel {
 		double yn = boost::math::sph_neumann(n, x);
 		return std::complex<double>(jn, -yn);
 	}
+
+	// Batch compute Spherical Hankel Function of the Second Kind
+	// h_l^(1)(x) = j_l(x) + i*y_l(x), for l = 0, 1, ..., L
+	inline void spherical_hankel_1_array(int L, double x,
+		std::vector<std::complex<double>>& h1)
+	{
+		h1.resize(L + 1);
+
+		for (int l = 0; l <= L; ++l) {
+			h1[l] = spherical_hankel_1(l, x);
+		}
+	}
+
+	// h_l^(2)(x) = j_l(x) - i*y_l(x), for l = 0, 1, ..., L
+	inline void spherical_hankel_2_array(int L, double x,
+		std::vector<std::complex<double>>& h2)
+	{
+		h2.resize(L + 1);
+
+		for (int l = 0; l <= L; ++l) {
+			h2[l] = spherical_hankel_2(l, x);
+		}
+	}
 }// namespace Bessel
 
 namespace ComplexBessel {

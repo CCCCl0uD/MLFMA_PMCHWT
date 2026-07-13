@@ -3,6 +3,7 @@
 #define ALGOMLFMM_H
 
 #include <atomic>
+#include <algorithm>
 #include <vector>
 #include <chrono>
 #include <complex>
@@ -14,111 +15,125 @@
 #include "OverloadAlgo.h"
 #include "OCTree.h"
 #include "Bessel.h"
+#include "EMSource.h"
 
 namespace AlgoMLFMM {
 	inline void computeBase_MLFMM(
 		const std::vector<std::vector<OCTree::Node*>>& octreeNodes,
 		const EMSource& wave, const int integralEquType_,
-		int maxLevel_, int rwgSize, int& L_k1, int& L_k2, int& row, int& levelSpan,
+		int maxLevel_, int rwgSize, std::vector<int>& L_k1, std::vector<int>& L_k2, int& row, int& levelSpan,
 		std::vector<std::vector<double>>& WGL_k1, std::vector<std::vector<double>>& WGL_k2,
 		std::vector<double>& WGL_phi_k1, std::vector<double>& WGL_phi_k2,
 		std::vector<std::vector<double>>& theta_level_k1, std::vector<std::vector<double>>& theta_level_k2,
 		std::vector<std::vector<double>>& phi_level_k1, std::vector<std::vector<double>>& phi_level_k2,
 		std::vector<std::vector<kp_Point>>& kp_lvl_k1, std::vector<std::vector<kp_Point>>& kp_lvl_k2)
 	{
-		const double highLevelLen = octreeNodes[maxLevel_][0]->cubeLength;
-
-		double D_ = std::sqrt(3.0) * highLevelLen;
-		L_k1 = static_cast<int>(std::ceil(wave.k1_abs() * D_ + 6.0 * std::cbrt(wave.k1_abs() * D_)));
-
 		row = rwgSize;
 		levelSpan = maxLevel_ - 1;
 
-		// 局部临时变量
-		std::vector<double> XGL_temp, WGL_temp;
-		std::vector<double> theta, phi;
-		std::vector<std::vector<double>> XGL_local;
+		auto cal_L_k = [&](double kAbs, int level)->int {
+			const int physicalLevel = maxLevel_ - level; // 物理层级
+			const double highLevelLen = octreeNodes[physicalLevel][0]->cubeLength;
+			const double D_ = std::sqrt(3.0) * highLevelLen;
+			return static_cast<int>(std::ceil(kAbs * D_ + 6.0 * std::cbrt(kAbs * D_)));
+			};
 
-		for (int i = 0; i < levelSpan; i++) {
-			int n = (1 << i) * L_k1;
-			my_math::gauss_legendre(n, XGL_temp, WGL_temp);
-			XGL_local.push_back(XGL_temp);
-			WGL_k1.push_back(WGL_temp);
-			XGL_temp.clear();
-			WGL_temp.clear();
-		}
+		auto buildAngularGrid = [&](double kAbs,
+			std::vector<int>& L_by_level,
+			std::vector<std::vector<double>>& WGL,
+			std::vector<double>& WGL_phi,
+			std::vector<std::vector<double>>& theta_level,
+			std::vector<std::vector<double>>& phi_level,
+			std::vector<std::vector<kp_Point>>& kp_lvl) {
+				L_by_level.clear();
+				WGL.clear();
+				WGL_phi.clear();
+				theta_level.clear();
+				phi_level.clear();
+				kp_lvl.clear();
 
-		for (int i = 0; i < levelSpan; i++) {
-			theta.clear();
-			phi.clear();
+				L_by_level.reserve(levelSpan);
+				WGL.reserve(levelSpan);
+				WGL_phi.reserve(levelSpan);
+				theta_level.reserve(levelSpan);
+				phi_level.reserve(levelSpan);
+				kp_lvl.reserve(levelSpan);
 
-			for (int j = static_cast<int>(WGL_k1[i].size()) - 1; j >= 0; j--) {
-				double xGL = XGL_local[i][j];  // 原来从 XGL 读取，但 XGL 与 WGL 尺寸相同，且只在 theta 计算中用于取节点位置
-				theta.push_back(std::acos(xGL));
-			}
-			theta_level_k1.push_back(theta);
+				for (int i = 0; i < levelSpan; ++i) {
+					const int L = cal_L_k(kAbs, i);
+					const int thetaCount = L;
+					//const int thetaCount = L + 1;
 
-			for (int j = 0; j < (1 << (i + 1)) * L_k1; ++j) {
-				if (j == 0) {
-					WGL_phi_k1.push_back(Pi / ((1 << i) * L_k1));
+					L_by_level.push_back(L);
+
+					std::vector<double> XGL_temp;
+					std::vector<double> WGL_temp;
+					my_math::gauss_legendre(thetaCount, XGL_temp, WGL_temp);
+					WGL.push_back(WGL_temp);
+
+					std::vector<double> theta;
+					theta.reserve(thetaCount);
+					for (int j = thetaCount - 1; j >= 0; --j) {
+						theta.push_back(std::acos(XGL_temp[j]));
+					}
+					theta_level.push_back(theta);
+
+					std::vector<double> phi;
+					const int phiCount = 2 * L;
+					const double dphi = Pi / L;
+					phi.reserve(phiCount);
+					WGL_phi.push_back(dphi);
+					for (int j = 0; j < phiCount; ++j) {
+						phi.push_back(j * dphi + 0.5 * dphi);
+					}
+					phi_level.push_back(phi);
+
+					std::vector<kp_Point> current_lvl_kp;
+					current_lvl_kp.reserve(theta_level[i].size() * phi_level[i].size());
+					for (int t = 0; t < static_cast<int>(theta_level[i].size()); ++t) {
+						for (int p = 0; p < static_cast<int>(phi_level[i].size()); ++p) {
+							double kx = std::sin(theta_level[i][t]) * std::cos(phi_level[i][p]);
+							double ky = std::sin(theta_level[i][t]) * std::sin(phi_level[i][p]);
+							double kz = std::cos(theta_level[i][t]);
+							current_lvl_kp.emplace_back(kx, ky, kz);
+						}
+					}
+					kp_lvl.push_back(current_lvl_kp);
 				}
-				phi.push_back(j * Pi / ((1 << i) * L_k1) + 0.5 * Pi / ((1 << i) * L_k1));
-			}
-			phi_level_k1.push_back(phi);
+			};
 
-			std::vector<kp_Point> current_lvl_kp;
-			for (int j = 0; j < static_cast<int>(theta.size()); ++j) {
-				for (int k = 0; k < static_cast<int>(phi.size()); ++k) {
-					double kx = std::sin(theta_level_k1[i][j]) * std::cos(phi_level_k1[i][k]);
-					double ky = std::sin(theta_level_k1[i][j]) * std::sin(phi_level_k1[i][k]);
-					double kz = std::cos(theta_level_k1[i][j]);
-					current_lvl_kp.emplace_back(kx, ky, kz);
-				}
-			}
-			kp_lvl_k1.push_back(current_lvl_kp);
-		}
+		buildAngularGrid(wave.k1_abs(), L_k1, WGL_k1, WGL_phi_k1, theta_level_k1, phi_level_k1, kp_lvl_k1);
 
 		if (integralEquType_ == 2) {
-			L_k2 = static_cast<int>(std::ceil(wave.k2_abs() * D_ + 6.0 * std::cbrt(wave.k2_abs() * D_)));
+			buildAngularGrid(wave.k2_abs(), L_k2, WGL_k2, WGL_phi_k2, theta_level_k2, phi_level_k2, kp_lvl_k2);
+		}
 
-			for (int i = 0; i < levelSpan; i++) {
-				int n = (1 << i) * L_k2;
-				my_math::gauss_legendre(n, XGL_temp, WGL_temp);
-				XGL_local.push_back(XGL_temp);
-				WGL_k2.push_back(WGL_temp);
-				XGL_temp.clear();
-				WGL_temp.clear();
-			}
-
-			for (int i = 0; i < levelSpan; i++) {
-				theta.clear();
-				phi.clear();
-
-				for (int j = static_cast<int>(WGL_k2[i].size()) - 1; j >= 0; j--) {
-					double xGL = XGL_local[i + levelSpan][j];  // 原来从 XGL 读取，但 XGL 与 WGL 尺寸相同，且只在 theta 计算中用于取节点位置
-					theta.push_back(std::acos(xGL));
+		auto printAngularGridInfo = [&](const char* tag,
+			const std::vector<int>& L_by_level,
+			const std::vector<std::vector<double>>& theta_level,
+			const std::vector<std::vector<double>>& phi_level,
+			const std::vector<std::vector<kp_Point>>& kp_lvl) {
+				std::cout << "Info: computeBase_MLFMM " << tag
+					<< " angular grid summary (AlgoMLFMM.h)" << std::endl;
+				for (int i = 0; i < static_cast<int>(L_by_level.size()); ++i) {
+					const int physicalLevel = maxLevel_ - i;
+					std::cout << "  physical level " << std::setw(2) << physicalLevel
+						<< ": L = " << std::setw(4) << L_by_level[i]
+						<< ", theta = " << std::setw(5) << theta_level[i].size()
+						<< ", phi = " << std::setw(5) << phi_level[i].size()
+						<< ", kp = " << std::setw(8) << kp_lvl[i].size()
+						<< std::endl;
 				}
-				theta_level_k2.push_back(theta);
+			};
 
-				for (int j = 0; j < (1 << (i + 1)) * L_k2; ++j) {
-					if (j == 0) {
-						WGL_phi_k2.push_back(Pi / ((1 << i) * L_k2));
-					}
-					phi.push_back(j * Pi / ((1 << i) * L_k2) + 0.5 * Pi / ((1 << i) * L_k2));
-				}
-				phi_level_k2.push_back(phi);
+		std::cout << "Info: computeBase_MLFMM done, row = " << row
+			<< ", maxLevel = " << maxLevel_
+			<< ", levelSpan = " << levelSpan
+			<< " (AlgoMLFMM.h)" << std::endl;
+		printAngularGridInfo("k1", L_k1, theta_level_k1, phi_level_k1, kp_lvl_k1);
 
-				std::vector<kp_Point> current_lvl_kp;
-				for (int j = 0; j < static_cast<int>(theta.size()); ++j) {
-					for (int k = 0; k < static_cast<int>(phi.size()); ++k) {
-						double kx = std::sin(theta_level_k2[i][j]) * std::cos(phi_level_k2[i][k]);
-						double ky = std::sin(theta_level_k2[i][j]) * std::sin(phi_level_k2[i][k]);
-						double kz = std::cos(theta_level_k2[i][j]);
-						current_lvl_kp.emplace_back(kx, ky, kz);
-					}
-				}
-				kp_lvl_k2.push_back(current_lvl_kp);
-			}
+		if (integralEquType_ == 2) {
+			printAngularGridInfo("k2", L_k2, theta_level_k2, phi_level_k2, kp_lvl_k2);
 		}
 	}
 
@@ -178,7 +193,8 @@ namespace AlgoMLFMM {
 		std::vector<std::vector<std::vector<std::complex<double>>>>& TF,
 		const std::vector<std::vector<OCTree::nodePoint>>& octreeNodesDRvec,
 		const std::vector<std::vector<kp_Point>>& kp_lvl,
-		int maxLevel_, int L, std::complex<double> k_wavenumber)
+		const std::vector<int>& L_lvl,
+		int maxLevel_, std::complex<double> k_wavenumber)
 	{
 		auto t_start = std::chrono::high_resolution_clock::now();
 
@@ -190,6 +206,10 @@ namespace AlgoMLFMM {
 		}
 		if (kp_lvl.empty()) {
 			std::cerr << "Error: kp_level not initialized" << std::endl;
+			return;
+		}
+		if (static_cast<int>(kp_lvl.size()) < span || static_cast<int>(L_lvl.size()) < span) {
+			std::cerr << "Error: kp_lvl or L_lvl size mismatch in computeTransferFactorMatrix" << std::endl;
 			return;
 		}
 		TF.resize(maxLevel_ - 1);
@@ -207,6 +227,7 @@ namespace AlgoMLFMM {
 			int totalVec = static_cast<int>(octreeNodesDRvec[level].size());
 			int rev = span - 1 - level;
 
+			const int L_ = L_lvl[rev];
 			const int kps = static_cast<int>(kp_lvl[rev].size());
 
 			std::atomic<int> finishedVec(0);
@@ -239,8 +260,9 @@ namespace AlgoMLFMM {
 				my_math::normalize(r, Rpq);
 
 				std::complex<double> kR = k_wavenumber * Rpq;
+				int L = std::min(L_, static_cast<int>(std::ceil(std::abs(kR))));
 				std::vector<std::complex<double>> h2_array;
-				ComplexBessel::spherical_hankel_2_array(L, kR, h2_array);
+				Bessel::spherical_hankel_2_array(L, std::abs(kR), h2_array);
 
 				auto& kpLevel = kp_lvl[rev];
 
@@ -263,6 +285,8 @@ namespace AlgoMLFMM {
 			progressThread.join();
 			std::cout << "\nInfo: Level " << level + 2
 				<< " transfer factor done, total vectors: " << totalVec << " (AlgoMLFMM.h)" << std::endl;
+			std::cout << "Info: Level " << level + 2
+				<< " transfer factor done, kp points: " << kps << ", L = " << L_ << " (AlgoMLFMM.h)" << std::endl;
 		}
 		auto t_end = std::chrono::high_resolution_clock::now();
 		auto t_elapsed = std::chrono::duration_cast<std::chrono::microseconds>(t_end - t_start);

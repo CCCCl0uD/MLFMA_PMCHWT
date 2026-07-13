@@ -53,7 +53,7 @@ RCSExportConfig createRCSExportConfig(const std::string& inputFile,
 }
 
 //\f:Times New Roman(f = 0.8GHz)
-//\f : Times New Roman(HH polarizations)
+//\f:Times New Roman(HH polarizations)
 //\g(q)\ - (\f:Times New Roman(i)) = \g(q)\ - (\f:Times New Roman(s)) = 90\ + (。), \g(f)\ - (\f:Times New Roman(i)) = 0\ + (。)
 //\g(e)\ - (\f:Times New Roman(r)) = (4, -0.001)
 
@@ -85,9 +85,9 @@ int main(int argc, char* argv[]) {
 	// ------- Single -------
 	std::vector<Point> points;
 	std::vector<FaceElement> faces;
-	const std::string inputFile = "D:\\MyCode\\PMCHWT_MLFMA\\DATA\\Sphere_Die_8e8\\Sphere_8e8.nas";
+	const std::string inputFile = "D:\\MyCode\\PMCHWT_MLFMA\\DATA\\Cube_0d5m_Die_1e9\\Cube_0d5m_Die_1e9.nas";
 	/************************************************************************/
-	double freq = 8.0e8, E0 = 1.0;
+	double freq = 1.0e9, E0 = 1.0;
 	double inc_th = 90.0, inc_ph = 0.0;
 	double sca_th_s = 90.0, sca_th_f = 90.0;
 	double sca_ph_s = 0.0, sca_ph_f = 360.0;
@@ -98,8 +98,8 @@ int main(int argc, char* argv[]) {
 	std::string polarization = "h";// horizontal->90 / vertical->0
 	int selectAlgorithm = 2;// 0==>MoM;1==>FMM;2==>MLFMM
 	int selectIntegralEqu = 2;// 0==>EFIE;1==>CFIE;2==>PMCHWT
-	int selectMatrixSolver = 0;// 0==>GMRES;1==>CGS
-	std::complex<double> epsilonR(4.0, -0.001);
+	int selectMatrixSolver = 1;// 0==>GMRES;1==>CGS
+	std::complex<double> epsilonR(4.0, -3.0);
 	std::complex<double> muR(1.0, 0.0);
 	/************************************************************************/
 	omp_set_dynamic(0);

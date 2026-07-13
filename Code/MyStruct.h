@@ -5,6 +5,7 @@
 
 #include <array>
 #include <complex>
+#include <vector>
 
 // ====== Complex3D ======
 struct Complex3D {
@@ -98,6 +99,13 @@ struct RWGBase {
 	Point* freeVertexNegative;
 	double edgeLength;
 	Point edgeCenterCenter;
+};
+
+struct HSBMonoSample {
+	double thetaDeg;
+	double phiDeg;
+	int phiOrder = 1;
+	std::vector<std::complex<double>> field;
 };
 
 #endif // MYSTRUCT_H
