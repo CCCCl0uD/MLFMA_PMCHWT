@@ -24,7 +24,8 @@ public:
 	const double E0;
 	const int integralEquType_;
 	const int matrixSolverType_;
-	int L_k1, L_k2;                                       // 多极子模式数
+	std::vector<int> L_k1;
+	std::vector<int> L_k2;
 	int levelSpan;                                        // 级数跨度
 	int row;                                              // RWG基函数个数
 	const gaussPoints& gausspoint;

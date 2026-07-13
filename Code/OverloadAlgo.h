@@ -25,9 +25,11 @@ inline std::array<double, 3> cross(
 	const std::array<double, 3>& u,
 	const std::array<double, 3>& v)
 {
-	return { u[1] * v[2] - u[2] * v[1],
-			 u[2] * v[0] - u[0] * v[2],
-			 u[0] * v[1] - u[1] * v[0] };
+	return {
+		u[1] * v[2] - u[2] * v[1],
+		u[2] * v[0] - u[0] * v[2],
+		u[0] * v[1] - u[1] * v[0]
+	};
 }
 
 inline void cross(double* res, const double* u, const double* v) {
@@ -211,9 +213,7 @@ inline  T norm(T* u, T* v)
 {
 	return sqrt(norm2(u, v));
 }
-/****************************************************************************/
-//‘”œÓ
-/****************************************************************************/
+
 namespace my_memory {
 	template<typename T>
 	inline size_t memory4D(const std::vector<std::vector<std::vector<std::vector<T>>>>& V)
@@ -358,5 +358,153 @@ namespace my_math {
 		F[2] = -r2r0 * rho[0] - r2r1 * rho[1] + (1 - r2r2) * rho[2];
 	}
 }// namespace my_math
+
+namespace my_hsb {
+	inline double normalizePhiDeg(double phiDeg) {
+		double v = std::fmod(phiDeg, 360.0);
+		if (v < 0.0) v += 360.0;
+		return v;
+	}
+
+	inline double wrapAngleRad(double x) {
+		while (x > Pi) x -= 2.0 * Pi;
+		while (x < -Pi) x += 2.0 * Pi;
+		return x;
+	}
+
+	inline double dirichletKernel(double delta, int order) {
+		const int n = std::max(1, order);
+		const double half = 0.5 * delta;
+		const double denom = std::sin(half);
+		if (std::abs(denom) < 1.0e-12) {
+			return 1.0;
+		}
+		return std::sin((2.0 * n + 1.0) * half) /
+			((2.0 * n + 1.0) * denom);
+	}
+
+	template<typename SolverType>
+	inline double estimateBoundingSphereRadius(const SolverType& solver) {
+		std::array<double, 3> mn = {
+			std::numeric_limits<double>::max(),
+			std::numeric_limits<double>::max(),
+			std::numeric_limits<double>::max()
+		};
+		std::array<double, 3> mx = {
+			std::numeric_limits<double>::lowest(),
+			std::numeric_limits<double>::lowest(),
+			std::numeric_limits<double>::lowest()
+		};
+
+		auto visitPoint = [&](const Point* p) {
+			if (!p) return;
+			mn[0] = std::min(mn[0], p->x);
+			mn[1] = std::min(mn[1], p->y);
+			mn[2] = std::min(mn[2], p->z);
+			mx[0] = std::max(mx[0], p->x);
+			mx[1] = std::max(mx[1], p->y);
+			mx[2] = std::max(mx[2], p->z);
+			};
+
+		for (const auto& rwg : solver.rwgs) {
+			if (rwg.positiveFace) {
+				visitPoint(rwg.positiveFace->vertex1);
+				visitPoint(rwg.positiveFace->vertex2);
+				visitPoint(rwg.positiveFace->vertex3);
+			}
+			if (rwg.negativeFace) {
+				visitPoint(rwg.negativeFace->vertex1);
+				visitPoint(rwg.negativeFace->vertex2);
+				visitPoint(rwg.negativeFace->vertex3);
+			}
+		}
+
+		if (mx[0] < mn[0] || mx[1] < mn[1] || mx[2] < mn[2]) {
+			return 0.0;
+		}
+
+		const std::array<double, 3> center = {
+			0.5 * (mn[0] + mx[0]),
+			0.5 * (mn[1] + mx[1]),
+			0.5 * (mn[2] + mx[2])
+		};
+
+		double radius = 0.0;
+		auto updateRadius = [&](const Point* p) {
+			if (!p) return;
+			const double dx = p->x - center[0];
+			const double dy = p->y - center[1];
+			const double dz = p->z - center[2];
+			radius = std::max(radius, std::sqrt(dx * dx + dy * dy + dz * dz));
+			};
+
+		for (const auto& rwg : solver.rwgs) {
+			if (rwg.positiveFace) {
+				updateRadius(rwg.positiveFace->vertex1);
+				updateRadius(rwg.positiveFace->vertex2);
+				updateRadius(rwg.positiveFace->vertex3);
+			}
+			if (rwg.negativeFace) {
+				updateRadius(rwg.negativeFace->vertex1);
+				updateRadius(rwg.negativeFace->vertex2);
+				updateRadius(rwg.negativeFace->vertex3);
+			}
+		}
+		return radius;
+	}
+
+	inline std::complex<double> interpolateHSBComponent(
+		const std::vector<std::vector<HSBMonoSample>>& rings,
+		double thetaDeg,
+		double phiDeg,
+		int component)
+	{
+		const double theta = thetaDeg * Pi / 180.0;
+		const double phi = normalizePhiDeg(phiDeg) * Pi / 180.0;
+		const int thetaOrder = std::max(1, static_cast<int>(rings.size()));
+
+		std::complex<double> result(0.0, 0.0);
+		double thetaWeightSum = 0.0;
+
+		for (const auto& ring : rings) {
+			if (ring.empty()) continue;
+			const double thetaM = ring.front().thetaDeg * Pi / 180.0;
+			const double wt = dirichletKernel(theta - thetaM, thetaOrder);
+			std::complex<double> ringValue(0.0, 0.0);
+			double phiWeightSum = 0.0;
+
+			for (const auto& sample : ring) {
+				const double phiN = normalizePhiDeg(sample.phiDeg) * Pi / 180.0;
+				const double wp = dirichletKernel(
+					wrapAngleRad(phi - phiN), sample.phiOrder);
+				ringValue += wp * sample.field[component];
+				phiWeightSum += wp;
+			}
+
+			if (std::abs(phiWeightSum) > 1.0e-12) {
+				ringValue /= phiWeightSum;
+			}
+			result += wt * ringValue;
+			thetaWeightSum += wt;
+		}
+
+		if (std::abs(thetaWeightSum) > 1.0e-12) {
+			result /= thetaWeightSum;
+		}
+		return result;
+	}
+
+	inline std::vector<std::complex<double>> interpolateHSBField(
+		const std::vector<std::vector<HSBMonoSample>>& rings,
+		double thetaDeg,
+		double phiDeg)
+	{
+		std::vector<std::complex<double>> field(3, std::complex<double>(0.0, 0.0));
+		for (int c = 0; c < 3; ++c) {
+			field[c] = interpolateHSBComponent(rings, thetaDeg, phiDeg, c);
+		}
+		return field;
+	}
+}
 
 #endif // OVERLOADALGO_H

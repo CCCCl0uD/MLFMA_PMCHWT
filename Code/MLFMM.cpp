@@ -27,7 +27,7 @@ MLFMM::MLFMM(
 
 	if (integralEquType_ != 2) {
 		// k1: TF1
-		AlgoMLFMM::computeTransferFactorMatrix(TF, octreeNodesDRvec_, kp_lvl_k1, maxLevel_, L_k1, wave.k1());
+		AlgoMLFMM::computeTransferFactorMatrix(TF, octreeNodesDRvec_, kp_lvl_k1, L_k1, maxLevel_, wave.k1());
 
 		// k1: Interpolation matrix
 		AlgoMLFMM::computeInterpolationMatrix(interpol_k1, kp_lvl_k1, theta_level_k1, phi_level_k1, maxLevel_);
@@ -83,11 +83,11 @@ MLFMM::MLFMM(
 
 		// k1: TF1
 		AlgoMLFMM::computeTransferFactorMatrix(TF, octreeNodesDRvec_, kp_lvl_k1,
-			maxLevel_, L_k1, wave.k1());
+			L_k1, maxLevel_, wave.k1());
 
 		// k2: TF2
 		AlgoMLFMM::computeTransferFactorMatrix(TF2, octreeNodesDRvec_, kp_lvl_k2,
-			maxLevel_, L_k2, wave.k2());
+			L_k2, maxLevel_, wave.k2());
 
 		// k1: Interpolation matrix
 		AlgoMLFMM::computeInterpolationMatrix(interpol_k1, kp_lvl_k1,

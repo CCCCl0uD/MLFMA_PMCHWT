@@ -214,8 +214,9 @@ namespace RCSUtils {
 		//exportV(solver, cfg);
 
 		// 求解
-		int itr_max = 200, mr = 50;
-		double tol_abs = 1.0e-8, tol_rel = 1.0e-4;
+		int itr_max = solver.row, mr = 50;
+		double tol_abs = 1.0e-8;
+		double tol_rel = 1.0e-4;
 		std::complex<double>* I_solve = new std::complex<double>[solver.row];
 		std::complex<double>* Vec_R = new std::complex<double>[solver.row];
 		for (int i = 0; i < solver.row; ++i) {
@@ -261,9 +262,9 @@ namespace RCSUtils {
 		size_t mem = solver.computeMem();
 		delete[] I_solve;
 		delete[] Vec_R;
-		rcsFile << "\n\nMoM memory = " << mem / (1024.0 * 1024.0) << " MB\n";
+		rcsFile << "\n\nAlgorithm memory = " << mem / (1024.0 * 1024.0) << " MB\n";
 		rcsFile.close();
-		std::cout << "MoM memory = " << mem / (1024.0 * 1024.0) << " MB" << std::endl;
+		std::cout << "Algorithm memory = " << mem / (1024.0 * 1024.0) << " MB" << std::endl;
 		std::cout << "RCS export completed." << std::endl;
 	}
 
@@ -303,8 +304,9 @@ namespace RCSUtils {
 			vFile << "\n";*/
 
 			// 求解
-			int itr_max = 200, mr = 50;
-			double tol_abs = 1e-8, tol_rel = 1e-4;
+			int itr_max = solver.row, mr = 50;
+			double tol_abs = 1.0e-8;
+			double tol_rel = 1.0e-4;
 			std::complex<double>* I_solve = new std::complex<double>[solver.row];
 			std::complex<double>* Vec_R = new std::complex<double>[solver.row];
 			for (int i = 0; i < solver.row; ++i) {
@@ -360,8 +362,9 @@ namespace RCSUtils {
 
 		// PMCHW: 矩阵大小 = 2N = 2 * solver.row
 		int totalRow = 2 * solver.row;
-		int itr_max = 600, mr = 50;
-		double tol_abs = 1.0e-8, tol_rel = 1.0e-4;
+		int itr_max = 2 * solver.row, mr = 50;
+		double tol_abs = 1.0e-8;
+		double tol_rel = 1.0e-4;
 		std::complex<double>* I_solve = new std::complex<double>[totalRow];
 		std::complex<double>* Vec_R = new std::complex<double>[totalRow];
 		for (int i = 0; i < totalRow; ++i) {
@@ -452,8 +455,9 @@ namespace RCSUtils {
 
 			computeV(solver, kinc, einc, hinc);
 
-			int itr_max = 200, mr = 50;
-			double tol_abs = 1e-8, tol_rel = 1e-4;
+			int itr_max = 2 * solver.row, mr = 50;
+			double tol_abs = 1.0e-8;
+			double tol_rel = 1.0e-4;
 			std::complex<double>* I_solve = new std::complex<double>[totalRow];
 			std::complex<double>* Vec_R = new std::complex<double>[totalRow];
 			for (int i = 0; i < totalRow; ++i) {
@@ -490,6 +494,149 @@ namespace RCSUtils {
 		}
 		rcsFile.close();
 		std::cout << "RCS (PMCHW Mono) export completed." << std::endl;
+	}
+
+	template<typename SolverType, typename ComputeVFunc>
+	inline void computeMonoStatic_HSB(SolverType& solver, const RCSExportConfig& cfg,
+		ComputeVFunc computeV, double rho = 1.2)
+	{
+		auto rcsFile = cfg.openFile("_RCS_HSB", "txt");
+		if (!rcsFile.is_open()) {
+			throw std::runtime_error("Cannot open HSB RCS file");
+		}
+		const std::string pol_wave = cfg.polWaveStr();
+		const double data_pol = (pol_wave == "V") ? 0.0 : 90.0;
+		const bool isPMCHWT = (solver.integralEquType_ == 2);
+		const int totalRow = isPMCHWT ? 2 * solver.row : solver.row;
+		const double radius = my_hsb::estimateBoundingSphereRadius(solver);
+		const double W = std::max(1.0, rho * solver.wave.k1_abs() * radius);
+		const int thetaCount = std::max(2, static_cast<int>(std::ceil(2.0 * W)));
+
+		std::vector<std::vector<HSBMonoSample>> rings;
+		rings.reserve(thetaCount);
+
+		int sampleCount = 0;
+		for (int m = 1; m <= thetaCount; ++m) {
+			const double theta = Pi * static_cast<double>(m) /
+				static_cast<double>(thetaCount + 1);
+			const double thetaDeg = theta * 180.0 / Pi;
+			const int phiOrder = std::max(
+				1, static_cast<int>(std::ceil(W * std::sin(theta))));
+			const int phiCount = 2 * phiOrder + 1;
+
+			std::vector<HSBMonoSample> ring;
+			ring.reserve(phiCount);
+
+			for (int n = -phiOrder; n <= phiOrder; ++n) {
+				double phiDeg = my_hsb::normalizePhiDeg(
+					360.0 * static_cast<double>(n) /
+					static_cast<double>(phiCount));
+
+				EMSource pw;
+				pw.initPW(data_pol, thetaDeg, phiDeg);
+				double kinc[3] = { pw.vW(0), pw.vW(1), pw.vW(2) };
+				double einc[3] = { pw.vE(0), pw.vE(1), pw.vE(2) };
+				double hinc[3] = { pw.vH(0), pw.vH(1), pw.vH(2) };
+
+				computeV(solver, kinc, einc, hinc);
+
+				std::vector<std::complex<double>> I_solve(
+					totalRow, std::complex<double>(0.0, 0.0));
+				std::vector<std::complex<double>> Vec_R(totalRow);
+				for (int i = 0; i < totalRow; ++i) {
+					Vec_R[i] = solver.Vm[i];
+				}
+
+				int itr_max = totalRow;
+				int mr = 50;
+				double tol_abs = 1.0e-8;
+				double tol_rel = 1.0e-4;
+				solver.matrix_solver(
+					totalRow, I_solve.data(), Vec_R.data(),
+					itr_max, mr, tol_abs, tol_rel);
+
+				std::vector<std::complex<double>> RCS_pre(3, 0.0);
+				if (isPMCHWT) {
+					RCSUtils::calculateRCS_PMCHWT(
+						solver, I_solve.data(), I_solve.data() + solver.row,
+						RCS_pre, solver.wave.k1(), solver.wave.k2(),
+						solver.wave.eta1(), solver.wave.eta2(),
+						thetaDeg, phiDeg);
+				}
+				else {
+					RCSUtils::calculateRCS(
+						solver, I_solve.data(), RCS_pre,
+						solver.wave.k1(), solver.wave.eta1(),
+						thetaDeg, phiDeg);
+				}
+
+				HSBMonoSample sample;
+				sample.thetaDeg = thetaDeg;
+				sample.phiDeg = phiDeg;
+				sample.phiOrder = phiOrder;
+				sample.field = std::move(RCS_pre);
+				ring.push_back(std::move(sample));
+				++sampleCount;
+			}
+
+			rings.push_back(std::move(ring));
+		}
+
+		const int numPoints = calculateNumPoints(
+			cfg.scaThetaStart, cfg.scaPhiStart,
+			cfg.scaThetaEnd, cfg.scaPhiEnd, cfg.scaStep);
+
+		for (int idx = 0; idx < numPoints; ++idx) {
+			double th_mono = 0.0;
+			double ph_mono = 0.0;
+			if (std::abs(cfg.scaThetaEnd - cfg.scaThetaStart) < 1.0e-6) {
+				th_mono = cfg.scaThetaStart;
+				ph_mono = cfg.scaPhiStart + idx * cfg.scaStep;
+			}
+			else {
+				th_mono = cfg.scaThetaStart + idx * cfg.scaStep;
+				ph_mono = cfg.scaPhiStart;
+			}
+
+			std::vector<std::complex<double>> RCS_pre =
+				my_hsb::interpolateHSBField(rings, th_mono, ph_mono);
+
+			EMSource pw;
+			pw.initPW(data_pol, th_mono, ph_mono);
+			double vec_v[3] = { pw.vTh(0), pw.vTh(1), pw.vTh(2) };
+			double vec_h[3] = { pw.vPh(0), pw.vPh(1), pw.vPh(2) };
+
+			std::complex<double> E_v =
+				vec_v[0] * RCS_pre[0] +
+				vec_v[1] * RCS_pre[1] +
+				vec_v[2] * RCS_pre[2];
+			std::complex<double> E_h =
+				vec_h[0] * RCS_pre[0] +
+				vec_h[1] * RCS_pre[1] +
+				vec_h[2] * RCS_pre[2];
+
+			double rcs = 10.0 * std::log10((std::norm(E_v) + std::norm(E_h)) / (4.0 * Pi));
+			double rcs_v = 10.0 * std::log10((std::norm(E_v)) / (4.0 * Pi));
+			double rcs_h = 10.0 * std::log10((std::norm(E_h)) / (4.0 * Pi));
+
+			rcsFile << std::fixed << std::setprecision(12);
+			rcsFile << std::setw(16) << th_mono << "\t" << ph_mono << "\t" << idx << "\t"
+				<< rcs << "\t" << rcs_v << "\t" << rcs_h << std::endl;
+		}
+
+		const size_t mem = solver.computeMem();
+		rcsFile << "\n\nHSB rho = " << rho << "\n";
+		rcsFile << "HSB radius = " << radius << "\n";
+		rcsFile << "HSB W = " << W << "\n";
+		rcsFile << "HSB sample points = " << sampleCount << "\n";
+		rcsFile << "Algorithm memory = "
+			<< mem / (1024.0 * 1024.0) << " MB\n";
+		rcsFile.close();
+
+		std::cout << "HSB sample points = " << sampleCount << std::endl;
+		std::cout << "Algorithm memory = "
+			<< mem / (1024.0 * 1024.0) << " MB" << std::endl;
+		std::cout << "RCS HSB export completed." << std::endl;
 	}
 }
 
