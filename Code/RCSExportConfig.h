@@ -29,6 +29,10 @@ struct RCSExportConfig {
 	double scaThetaStart{ 0.0 }, scaPhiStart{ 0.0 };
 	double scaThetaEnd{ 0.0 }, scaPhiEnd{ 0.0 };
 	double scaStep{ 1.0 };
+	bool useHSBMono{ false };
+	double hsbRho{ 1.2 };
+	bool exportHSBComplexField{ false };
+	bool exportHSBSamples{ false };
 	std::complex<double> epsilonR{ 1.0,0.0 };
 	std::complex<double> muR{ 1.0,0.0 };
 
@@ -82,6 +86,7 @@ struct RCSExportConfig {
 		if (scaThetaEnd < 0.0 || scaThetaEnd > 180.0) return false;
 		if (scaPhiStart < 0.0 || scaPhiStart > 360.0) return false;
 		if (scaPhiEnd < 0.0 || scaPhiEnd > 360.0) return false;
+		if (hsbRho <= 0.0) return false;
 		return true;
 	}
 

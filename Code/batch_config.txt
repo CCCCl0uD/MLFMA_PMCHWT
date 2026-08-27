@@ -1,9 +1,9 @@
-# MLFMA 批量仿真配置文件
+﻿# MLFMA 批量仿真配置文件
 # 行首 # 为注释
-# .\MLFMA.exe batch D:\MyCode\MLFMA_PMCHWT-main\MLFMA_PMCHWT-main\Code\batch_config.txt
+# .\MLFMA.exe batch D:\MyCode\PMCHWT_MLFMA\MLFMA\Code\batch_config.txt
 
 # ============ 网格文件（分号分隔多个路径） ============
-nas_files = D:\MyCode\PMCHWT_MLFMA\DATA\Cube_0d5m_Die_1e9\Cube_0d5m_Die_1e9.nas
+nas_files = D:\MyCode\PMCHWT_MLFMA\DATA\SLICY_like_1e9\SLICY_like_1e9.nas
 
 # ============ 频率列表 (Hz)，逗号分隔 ============
 frequencies = 1.0e9
@@ -19,7 +19,7 @@ incident_angles = 90:0
 # incident_phi_range = 0:350:10
 
 # ============ 散射角度范围 ============
-sca_theta = 90:90
+sca_theta = 0:180
 sca_phi = 0:360
 step = 1
 
@@ -28,14 +28,26 @@ step = 1
 algorithm = 2
 
 # integral_equation: 0 = EFIE, 1 = CFIE, 2 = PMCHWT
-integral_equation = 2
+integral_equation = 1
 
 # matrix_solver: 0 = GMRES, 1 = CGS
 matrix_solver = 0
 
-mono_dual = dual
+mono_dual = mono
+
+# HSB mono acceleration: 0 = off, 1 = on
+# Only takes effect for mono runs; hsb_rho is the oversampling factor W = rho*k*a.
+use_hsb_mono = 0
+hsb_rho = 1.2
+
+# export_hsb_complex_field: 0 = off, 1 = output Ev/Eh complex field on the configured scan grid
+export_hsb_complex_field = 0
+
+# export_hsb_samples: 0 = off, 1 = output accurate HSB sample information
+export_hsb_samples = 0
+
 gauss_points = 7
-omp_threads = 14
+omp_threads = 16
 
 # ============ 介质参数（仅 PMCHWT 时有效） ============
 material_list = 2.25,-0.0225,1.0,0.0;4.0,-0.08,1.0,0.0;10.0,-0.50,1.0,0.0
