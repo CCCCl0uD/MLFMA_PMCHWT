@@ -1,9 +1,9 @@
 // main.cpp
+#include "BatchRunner.h"
 #include "MoM.h"
 #include "FMM.h"
 #include "MLFMM.h"
 #include "RWGGenerator.h"
-#include "BatchRunner.h"
 
 RCSExportConfig createRCSExportConfig(const std::string& inputFile,
 	int selectAlgorithm, int selectIntegralEqu,
@@ -54,7 +54,7 @@ RCSExportConfig createRCSExportConfig(const std::string& inputFile,
 
 //\f:Times New Roman(f = 0.8GHz)
 //\f:Times New Roman(HH polarizations)
-//\g(q)\ - (\f:Times New Roman(i)) = \g(q)\ - (\f:Times New Roman(s)) = 90\ + (ã€‚), \g(f)\ - (\f:Times New Roman(i)) = 0\ + (ã€‚)
+//\g(q)\ - (\f:Times New Roman(i)) = \g(q)\ - (\f:Times New Roman(s)) = 90\ + (ã€?, \g(f)\ - (\f:Times New Roman(i)) = 0\ + (ã€?
 //\g(e)\ - (\f:Times New Roman(r)) = (4, -0.001)
 
 int main(int argc, char* argv[]) {
@@ -85,7 +85,7 @@ int main(int argc, char* argv[]) {
 	// ------- Single -------
 	std::vector<Point> points;
 	std::vector<FaceElement> faces;
-	const std::string inputFile = "D:\\MyCode\\PMCHWT_MLFMA\\DATA\\Cube_0d5m_Die_1e9\\Cube_0d5m_Die_1e9.nas";
+	const std::string inputFile = "D:\\MyCode\\PMCHWT_MLFMA\\DATA\\SLICY_like_1e9\\SLICY_like_1e9.nas";
 	/************************************************************************/
 	double freq = 1.0e9, E0 = 1.0;
 	double inc_th = 90.0, inc_ph = 0.0;
@@ -95,11 +95,15 @@ int main(int argc, char* argv[]) {
 	int N_points = 7;// 1, 3, 4, 6, 7, 12, 13, 16
 
 	std::string selectMono_Dual = "dual";// mono / dual
-	std::string polarization = "h";// horizontal->90 / vertical->0
+	std::string polarization = "v";// horizontal->90 / vertical->0
 	int selectAlgorithm = 2;// 0==>MoM;1==>FMM;2==>MLFMM
-	int selectIntegralEqu = 2;// 0==>EFIE;1==>CFIE;2==>PMCHWT
-	int selectMatrixSolver = 1;// 0==>GMRES;1==>CGS
-	std::complex<double> epsilonR(4.0, -3.0);
+	int selectIntegralEqu = 1;// 0==>EFIE;1==>CFIE;2==>PMCHWT
+	int selectMatrixSolver = 0;// 0==>GMRES;1==>CGS
+	bool useHSBMono = false;// true==>open HSBMono;false==>off HSBDual
+	double HSBMonoFactor = 1.2;
+	bool exportHSBComplexField = false;
+	bool exportHSBSamples = false;
+	std::complex<double> epsilonR(1.0, -0.01);
 	std::complex<double> muR(1.0, 0.0);
 	/************************************************************************/
 	omp_set_dynamic(0);
@@ -108,10 +112,14 @@ int main(int argc, char* argv[]) {
 	std::ios::sync_with_stdio(false);
 	std::cin.tie(nullptr);
 	/************************************************************************/
-	int debugInfoToFile = 0;// 0=>offï¼›1=>on
+	int debugInfoToFile = 0;// 0=>offï¼?=>on
 	/************************************************************************/
 	RCSExportConfig cfg = createRCSExportConfig(inputFile, selectAlgorithm, selectIntegralEqu, selectMono_Dual, polarization,
 		inc_th, inc_ph, sca_th_s, sca_ph_s, sca_th_f, sca_ph_f, step, N_points);
+	cfg.useHSBMono = useHSBMono;
+	cfg.hsbRho = HSBMonoFactor;
+	cfg.exportHSBComplexField = exportHSBComplexField;
+	cfg.exportHSBSamples = exportHSBSamples;
 	/************************************************************************/
 	double polVal = (polarization == "v") ? 0.0 : 90.0;
 	EMSource wave(freq, polVal);

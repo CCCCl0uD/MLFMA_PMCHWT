@@ -12,6 +12,7 @@
 #include <exception>
 #include <chrono>
 #include <complex>
+#include <cctype>
 #include <omp.h>
 
 #include "MoM.h"
@@ -42,6 +43,10 @@ struct SimTask {
 	double epsilonR_real, epsilonR_imag;
 	double muR_real, muR_imag;
 	int ompThreads;
+	bool useHSBMono;
+	double hsbRho;
+	bool exportHSBComplexField;
+	bool exportHSBSamples;
 };
 
 struct BatchConfig {
@@ -60,15 +65,21 @@ struct BatchConfig {
 	int N_points = 7;
 	std::vector<MaterialParam> materialParams{ MaterialParam{} };
 	int ompThreads = 12;
+	bool useHSBMono = false;
+	double hsbRho = 1.2;
+	bool exportHSBComplexField = false;
+	bool exportHSBSamples = false;
 
 	std::vector<SimTask> generateTasks() const {
 		std::vector<SimTask> tasks;
+		const std::vector<MaterialParam> pecMaterial{ MaterialParam{} };
+		const auto& activeMaterials = (selectIntegralEqu == 2) ? materialParams : pecMaterial;
 
 		for (const auto& nas : nasFiles) {
 			for (double freq : frequencies) {
 				for (const auto& [th, ph] : incidentAngles) {
 					for (int algorithm : selectAlgorithms) {
-						for (const auto& material : materialParams) {
+						for (const auto& material : activeMaterials) {
 							SimTask task;
 							task.nasFile = nas;
 							task.freq = freq;
@@ -89,6 +100,10 @@ struct BatchConfig {
 							task.muR_real = material.muR_real;
 							task.muR_imag = material.muR_imag;
 							task.ompThreads = ompThreads;
+							task.useHSBMono = useHSBMono;
+							task.hsbRho = hsbRho;
+							task.exportHSBComplexField = exportHSBComplexField;
+							task.exportHSBSamples = exportHSBSamples;
 							tasks.push_back(task);
 						}
 					}
@@ -296,12 +311,32 @@ public:
 			else if (key == "omp_threads") {
 				cfg.ompThreads = std::stoi(value);
 			}
+			else if (key == "use_hsb_mono") {
+				cfg.useHSBMono = parseBool(value);
+			}
+			else if (key == "hsb_rho") {
+				cfg.hsbRho = std::stod(value);
+			}
+			else if (key == "export_hsb_complex_field") {
+				cfg.exportHSBComplexField = parseBool(value);
+			}
+			else if (key == "export_hsb_samples") {
+				cfg.exportHSBSamples = parseBool(value);
+			}
 		}
 
 		return cfg;
 	}
 
 private:
+	static bool parseBool(const std::string& s) {
+		std::string v = trim(s);
+		for (char& ch : v) {
+			ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+		}
+		return v == "1" || v == "true" || v == "yes" || v == "on";
+	}
+
 	static std::string trim(const std::string& s) {
 		size_t start = s.find_first_not_of(" \t\r\n");
 		size_t end = s.find_last_not_of(" \t\r\n");
@@ -354,6 +389,10 @@ public:
 				<< ", IE: " << task.selectIntegralEqu
 				<< ", Solver: " << task.selectMatrixSolver
 				<< " (0=GMRES, 1=CGS)\n";
+			std::cout << "  HSB Mono: " << (task.useHSBMono ? "on" : "off")
+				<< ", rho=" << task.hsbRho
+				<< ", field=" << (task.exportHSBComplexField ? "on" : "off")
+				<< ", samples=" << (task.exportHSBSamples ? "on" : "off") << "\n";
 			std::cout << "  Polarization: h -> v (sequential)\n";
 			std::cout << "----------------------------------------\n";
 
@@ -454,6 +493,10 @@ private:
 				cfg.scaPhiStart = task.sca_ph_s;
 				cfg.scaPhiEnd = task.sca_ph_f;
 				cfg.scaStep = task.step;
+				cfg.useHSBMono = task.useHSBMono;
+				cfg.hsbRho = task.hsbRho;
+				cfg.exportHSBComplexField = task.exportHSBComplexField;
+				cfg.exportHSBSamples = task.exportHSBSamples;
 
 				if (task.selectIntegralEqu == 2) {
 					cfg.epsilonR = epsilonR;

@@ -1,6 +1,4 @@
 #pragma once
-#ifndef RCS_H
-#define RCS_H
 
 #include "RCSExportConfig.h"
 #include "EMSource.h"
@@ -42,12 +40,25 @@ namespace RCSUtils {
 		vFile.close();
 		std::cout << "Voltage vector export completed.\n";
 	}
+	inline int calculateAngleCount(double start, double end, double step) {
+		const double diff = std::abs(end - start);
+		if (diff < 1.0e-9) {
+			return 1;
+		}
+		return static_cast<int>(std::ceil(diff / step - 1.0e-9)) + 1;
+	}
+
+	inline double calculateAngleAt(double start, double end, double step, int idx, int count) {
+		if (idx == count - 1) {
+			return end;
+		}
+		const double direction = (end >= start) ? 1.0 : -1.0;
+		return start + direction * idx * step;
+	}
 
 	inline int calculateNumPoints(double start, double startPhi, double end, double endPhi, double step) {
-		if (std::abs(end - start) < 1e-6)
-			return static_cast<int>(std::abs(endPhi - startPhi) / step) + 1;
-		else
-			return static_cast<int>(std::abs(end - start) / step) + 1;
+		return calculateAngleCount(start, end, step) *
+			calculateAngleCount(startPhi, endPhi, step);
 	}
 
 	template<typename SolverType>
@@ -231,33 +242,32 @@ namespace RCSUtils {
 		// 计算双站 RCS
 		auto rcsFile = cfg.openFile("_RCS", "txt");
 		if (!rcsFile.is_open()) throw std::runtime_error("Cannot open RCS file");
+		const int thetaNum = calculateAngleCount(cfg.scaThetaStart, cfg.scaThetaEnd, cfg.scaStep);
+		const int phiNum = calculateAngleCount(cfg.scaPhiStart, cfg.scaPhiEnd, cfg.scaStep);
+		const int totalPoints = thetaNum * phiNum;
+		int idx = 0;
+		for (int it = 0; it < thetaNum; ++it) {
+			double th_dual = calculateAngleAt(
+				cfg.scaThetaStart, cfg.scaThetaEnd, cfg.scaStep, it, thetaNum);
+			for (int ip = 0; ip < phiNum; ++ip, ++idx) {
+				double ph_dual = calculateAngleAt(
+					cfg.scaPhiStart, cfg.scaPhiEnd, cfg.scaStep, ip, phiNum);
+				std::vector<std::complex<double>> RCS_pre(3, 0.0);
+				RCSUtils::calculateRCS(solver, I_solve, RCS_pre, solver.wave.k1(), solver.wave.eta1(), th_dual, ph_dual);
 
-		int numPoints = calculateNumPoints(cfg.scaThetaStart, cfg.scaPhiStart, cfg.scaThetaEnd, cfg.scaPhiEnd, cfg.scaStep);
-		for (int i = 0; i < numPoints; ++i) {
-			std::vector<std::complex<double>> RCS_pre(3, 0.0);
-			double th_dual, ph_dual;
-			if (std::abs(cfg.scaThetaEnd - cfg.scaThetaStart) < 1e-6) {
-				th_dual = cfg.scaThetaStart;
-				ph_dual = cfg.scaPhiStart + i * cfg.scaStep;
+				// 计算极化分量
+				pw.initPW(data_pol, th_dual, ph_dual);
+				double vec_v[3] = { pw.vTh(0), pw.vTh(1), pw.vTh(2) };
+				double vec_h[3] = { pw.vPh(0), pw.vPh(1), pw.vPh(2) };
+				std::complex<double> E_v = vec_v[0] * RCS_pre[0] + vec_v[1] * RCS_pre[1] + vec_v[2] * RCS_pre[2];
+				std::complex<double> E_h = vec_h[0] * RCS_pre[0] + vec_h[1] * RCS_pre[1] + vec_h[2] * RCS_pre[2];
+				double rcs = 10.0 * log10((norm(E_v) + norm(E_h)) / (4.0 * Pi));
+				double rcs_v = 10.0 * log10(norm(E_v) / (4.0 * Pi));
+				double rcs_h = 10.0 * log10(norm(E_h) / (4.0 * Pi));
+				rcsFile << std::fixed << std::setprecision(12);
+				rcsFile << std::setw(16) << th_dual << "\t" << ph_dual << "\t" << idx << "\t" << rcs << "\t" << rcs_v << "\t" << rcs_h << std::endl;
+				std::cout << std::setw(16) << th_dual << "\t" << ph_dual << "\t" << idx << "\t" << rcs << "\t" << rcs_v << "\t" << rcs_h << std::endl;
 			}
-			else {
-				th_dual = cfg.scaThetaStart + i * cfg.scaStep;
-				ph_dual = cfg.scaPhiStart;
-			}
-			RCSUtils::calculateRCS(solver, I_solve, RCS_pre, solver.wave.k1(), solver.wave.eta1(), th_dual, ph_dual);
-
-			// 计算极化分量
-			pw.initPW(data_pol, th_dual, ph_dual);
-			double vec_v[3] = { pw.vTh(0), pw.vTh(1), pw.vTh(2) };
-			double vec_h[3] = { pw.vPh(0), pw.vPh(1), pw.vPh(2) };
-			std::complex<double> E_v = vec_v[0] * RCS_pre[0] + vec_v[1] * RCS_pre[1] + vec_v[2] * RCS_pre[2];
-			std::complex<double> E_h = vec_h[0] * RCS_pre[0] + vec_h[1] * RCS_pre[1] + vec_h[2] * RCS_pre[2];
-			double rcs = 10.0 * log10((norm(E_v) + norm(E_h)) / (4.0 * Pi));
-			double rcs_v = 10.0 * log10(norm(E_v) / (4.0 * Pi));
-			double rcs_h = 10.0 * log10(norm(E_h) / (4.0 * Pi));
-			rcsFile << std::fixed << std::setprecision(12);
-			rcsFile << std::setw(16) << th_dual << "\t" << ph_dual << "\t" << i << "\t" << rcs << "\t" << rcs_v << "\t" << rcs_h << std::endl;
-			std::cout << std::setw(16) << th_dual << "\t" << ph_dual << "\t" << i << "\t" << rcs << "\t" << rcs_v << "\t" << rcs_h << std::endl;
 		}
 		size_t mem = solver.computeMem();
 		delete[] I_solve;
@@ -274,67 +284,68 @@ namespace RCSUtils {
 		if (!rcsFile.is_open()) throw std::runtime_error("Cannot open RCS file");
 		//auto iFile = cfg.openFile("_I", "txt");
 		//auto vFile = cfg.openFile("_V", "txt");
+		const int thetaNum = calculateAngleCount(cfg.scaThetaStart, cfg.scaThetaEnd, cfg.scaStep);
+		const int phiNum = calculateAngleCount(cfg.scaPhiStart, cfg.scaPhiEnd, cfg.scaStep);
+		const int totalPoints = thetaNum * phiNum;
+		int idx = 0;
+		for (int it = 0; it < thetaNum; ++it) {
+			double th_mono = calculateAngleAt(
+				cfg.scaThetaStart, cfg.scaThetaEnd, cfg.scaStep, it, thetaNum);
+			for (int ip = 0; ip < phiNum; ++ip, ++idx) {
+				double ph_mono = calculateAngleAt(
+					cfg.scaPhiStart, cfg.scaPhiEnd, cfg.scaStep, ip, phiNum);
+				std::string pol_wave = cfg.polWaveStr();
+				double data_pol = (pol_wave == "V") ? 0.0 : 90.0;
 
-		int numPoints = calculateNumPoints(cfg.scaThetaStart, cfg.scaPhiStart, cfg.scaThetaEnd, cfg.scaPhiEnd, cfg.scaStep);
-		for (int idx = 0; idx < numPoints; ++idx) {
-			double th_mono, ph_mono;
-			if (std::abs(cfg.scaThetaEnd - cfg.scaThetaStart) < 1e-6) {
-				th_mono = cfg.scaThetaStart;
-				ph_mono = cfg.scaPhiStart + idx * cfg.scaStep;
+				double kinc[3], einc[3], hinc[3];
+				EMSource pw;
+				pw.initPW(data_pol, th_mono, ph_mono);
+				kinc[0] = pw.vW(0); kinc[1] = pw.vW(1); kinc[2] = pw.vW(2);
+				einc[0] = pw.vE(0); einc[1] = pw.vE(1); einc[2] = pw.vE(2);
+				hinc[0] = pw.vH(0); hinc[1] = pw.vH(1); hinc[2] = pw.vH(2);
+
+				computeV(solver, kinc, einc, hinc);
+				// 写入 V
+				/*for (int i = 0; i < solver.row; ++i) {
+					vFile << std::setw(16) << th_mono << "\t" << ph_mono << "\t" << i << "\t" << solver.Vm[i] << "\n";
+				}
+				vFile << "\n";*/
+
+				// 求解
+				int itr_max = solver.row, mr = 50;
+				double tol_abs = 1.0e-8;
+				double tol_rel = 1.0e-4;
+				std::complex<double>* I_solve = new std::complex<double>[solver.row];
+				std::complex<double>* Vec_R = new std::complex<double>[solver.row];
+				for (int i = 0; i < solver.row; ++i) {
+					I_solve[i] = 0.0;
+					Vec_R[i] = solver.Vm[i];
+				}
+				solver.matrix_solver(solver.row, I_solve, Vec_R, itr_max, mr, tol_abs, tol_rel);
+				// 写入 I
+				/*for (int i = 0; i < solver.row; ++i) {
+					iFile << std::setw(16) << th_mono << "\t" << ph_mono << "\t" << i << "\t" << I_solve[i] << "\n";
+				}
+				iFile << "\n";*/
+
+				// 计算 RCS
+				std::vector<std::complex<double>> RCS_pre(3, 0.0);
+				RCSUtils::calculateRCS(solver, I_solve, RCS_pre, solver.wave.k1(), solver.wave.eta1(), th_mono, ph_mono);
+				double vec_v[3] = { pw.vTh(0), pw.vTh(1), pw.vTh(2) };
+				double vec_h[3] = { pw.vPh(0), pw.vPh(1), pw.vPh(2) };
+				std::complex<double> E_v = vec_v[0] * RCS_pre[0] + vec_v[1] * RCS_pre[1] + vec_v[2] * RCS_pre[2];
+				std::complex<double> E_h = vec_h[0] * RCS_pre[0] + vec_h[1] * RCS_pre[1] + vec_h[2] * RCS_pre[2];
+				double rcs = 10.0 * log10((norm(E_v) + norm(E_h)) / (4.0 * Pi));
+				double rcs_v = 10.0 * log10(norm(E_v) / (4.0 * Pi));
+				double rcs_h = 10.0 * log10(norm(E_h) / (4.0 * Pi));
+				rcsFile << std::fixed << std::setprecision(12);
+				rcsFile << std::setw(16) << th_mono << "\t" << ph_mono << "\t" << idx << "\t" << rcs << "\t" << rcs_v << "\t" << rcs_h << std::endl;
+				std::cout << "Mono angle point " << (idx + 1) << " / " << totalPoints
+					<< " completed: theta=" << th_mono << ", phi=" << ph_mono << std::endl;
+
+				delete[] I_solve;
+				delete[] Vec_R;
 			}
-			else {
-				th_mono = cfg.scaThetaStart + idx * cfg.scaStep;
-				ph_mono = cfg.scaPhiStart;
-			}
-			std::string pol_wave = cfg.polWaveStr();
-			double data_pol = (pol_wave == "V") ? 0.0 : 90.0;
-
-			double kinc[3], einc[3], hinc[3];
-			EMSource pw;
-			pw.initPW(data_pol, th_mono, ph_mono);
-			kinc[0] = pw.vW(0); kinc[1] = pw.vW(1); kinc[2] = pw.vW(2);
-			einc[0] = pw.vE(0); einc[1] = pw.vE(1); einc[2] = pw.vE(2);
-			hinc[0] = pw.vH(0); hinc[1] = pw.vH(1); hinc[2] = pw.vH(2);
-
-			computeV(solver, kinc, einc, hinc);
-			// 写入 V
-			/*for (int i = 0; i < solver.row; ++i) {
-				vFile << std::setw(16) << th_mono << "\t" << ph_mono << "\t" << i << "\t" << solver.Vm[i] << "\n";
-			}
-			vFile << "\n";*/
-
-			// 求解
-			int itr_max = solver.row, mr = 50;
-			double tol_abs = 1.0e-8;
-			double tol_rel = 1.0e-4;
-			std::complex<double>* I_solve = new std::complex<double>[solver.row];
-			std::complex<double>* Vec_R = new std::complex<double>[solver.row];
-			for (int i = 0; i < solver.row; ++i) {
-				I_solve[i] = 0.0;
-				Vec_R[i] = solver.Vm[i];
-			}
-			solver.matrix_solver(solver.row, I_solve, Vec_R, itr_max, mr, tol_abs, tol_rel);
-			// 写入 I
-			/*for (int i = 0; i < solver.row; ++i) {
-				iFile << std::setw(16) << th_mono << "\t" << ph_mono << "\t" << i << "\t" << I_solve[i] << "\n";
-			}
-			iFile << "\n";*/
-
-			// 计算 RCS
-			std::vector<std::complex<double>> RCS_pre(3, 0.0);
-			RCSUtils::calculateRCS(solver, I_solve, RCS_pre, solver.wave.k1(), solver.wave.eta1(), th_mono, ph_mono);
-			double vec_v[3] = { pw.vTh(0), pw.vTh(1), pw.vTh(2) };
-			double vec_h[3] = { pw.vPh(0), pw.vPh(1), pw.vPh(2) };
-			std::complex<double> E_v = vec_v[0] * RCS_pre[0] + vec_v[1] * RCS_pre[1] + vec_v[2] * RCS_pre[2];
-			std::complex<double> E_h = vec_h[0] * RCS_pre[0] + vec_h[1] * RCS_pre[1] + vec_h[2] * RCS_pre[2];
-			double rcs = 10.0 * log10((norm(E_v) + norm(E_h)) / (4.0 * Pi));
-			double rcs_v = 10.0 * log10(norm(E_v) / (4.0 * Pi));
-			double rcs_h = 10.0 * log10(norm(E_h) / (4.0 * Pi));
-			rcsFile << std::fixed << std::setprecision(12);
-			rcsFile << std::setw(16) << th_mono << "\t" << ph_mono << "\t" << idx << "\t" << rcs << "\t" << rcs_v << "\t" << rcs_h << std::endl;
-
-			delete[] I_solve;
-			delete[] Vec_R;
 		}
 		rcsFile.close();
 		/*iFile.close();
@@ -380,38 +391,36 @@ namespace RCSUtils {
 
 		auto rcsFile = cfg.openFile("_RCS", "txt");
 		if (!rcsFile.is_open()) throw std::runtime_error("Cannot open RCS file");
+		const int thetaNum = calculateAngleCount(cfg.scaThetaStart, cfg.scaThetaEnd, cfg.scaStep);
+		const int phiNum = calculateAngleCount(cfg.scaPhiStart, cfg.scaPhiEnd, cfg.scaStep);
+		const int totalPoints = thetaNum * phiNum;
+		int idx = 0;
+		for (int it = 0; it < thetaNum; ++it) {
+			double th_dual = calculateAngleAt(
+				cfg.scaThetaStart, cfg.scaThetaEnd, cfg.scaStep, it, thetaNum);
+			for (int ip = 0; ip < phiNum; ++ip, ++idx) {
+				double ph_dual = calculateAngleAt(
+					cfg.scaPhiStart, cfg.scaPhiEnd, cfg.scaStep, ip, phiNum);
+				std::vector<std::complex<double>> RCS_pre(3, 0.0);
+				RCSUtils::calculateRCS_PMCHWT(solver, I_J, I_M, RCS_pre,
+					solver.wave.k1(), solver.wave.k2(), solver.wave.eta1(), solver.wave.eta2(),
+					th_dual, ph_dual);
 
-		int numPoints = calculateNumPoints(cfg.scaThetaStart, cfg.scaPhiStart,
-			cfg.scaThetaEnd, cfg.scaPhiEnd, cfg.scaStep);
-		for (int i = 0; i < numPoints; ++i) {
-			std::vector<std::complex<double>> RCS_pre(3, 0.0);
-			double th_dual, ph_dual;
-			if (std::abs(cfg.scaThetaEnd - cfg.scaThetaStart) < 1e-6) {
-				th_dual = cfg.scaThetaStart;
-				ph_dual = cfg.scaPhiStart + i * cfg.scaStep;
+				pw.initPW(data_pol, th_dual, ph_dual);
+				double vec_v[3] = { pw.vTh(0), pw.vTh(1), pw.vTh(2) };
+				double vec_h[3] = { pw.vPh(0), pw.vPh(1), pw.vPh(2) };
+				std::complex<double> E_v = vec_v[0] * RCS_pre[0]
+					+ vec_v[1] * RCS_pre[1] + vec_v[2] * RCS_pre[2];
+				std::complex<double> E_h = vec_h[0] * RCS_pre[0]
+					+ vec_h[1] * RCS_pre[1] + vec_h[2] * RCS_pre[2];
+				double rcs = 10.0 * log10((norm(E_v) + norm(E_h)) / (4.0 * Pi));
+				double rcs_v = 10.0 * log10(norm(E_v) / (4.0 * Pi));
+				double rcs_h = 10.0 * log10(norm(E_h) / (4.0 * Pi));
+				rcsFile << std::fixed << std::setprecision(12);
+				rcsFile << std::setw(16) << th_dual << "\t" << ph_dual << "\t"
+					<< idx << "\t" << rcs << "\t" << rcs_v << "\t" << rcs_h
+					<< std::endl;
 			}
-			else {
-				th_dual = cfg.scaThetaStart + i * cfg.scaStep;
-				ph_dual = cfg.scaPhiStart;
-			}
-			RCSUtils::calculateRCS_PMCHWT(solver, I_J, I_M, RCS_pre,
-				solver.wave.k1(), solver.wave.k2(), solver.wave.eta1(), solver.wave.eta2(),
-				th_dual, ph_dual);
-
-			pw.initPW(data_pol, th_dual, ph_dual);
-			double vec_v[3] = { pw.vTh(0), pw.vTh(1), pw.vTh(2) };
-			double vec_h[3] = { pw.vPh(0), pw.vPh(1), pw.vPh(2) };
-			std::complex<double> E_v = vec_v[0] * RCS_pre[0]
-				+ vec_v[1] * RCS_pre[1] + vec_v[2] * RCS_pre[2];
-			std::complex<double> E_h = vec_h[0] * RCS_pre[0]
-				+ vec_h[1] * RCS_pre[1] + vec_h[2] * RCS_pre[2];
-			double rcs = 10.0 * log10((norm(E_v) + norm(E_h)) / (4.0 * Pi));
-			double rcs_v = 10.0 * log10(norm(E_v) / (4.0 * Pi));
-			double rcs_h = 10.0 * log10(norm(E_h) / (4.0 * Pi));
-			rcsFile << std::fixed << std::setprecision(12);
-			rcsFile << std::setw(16) << th_dual << "\t" << ph_dual << "\t"
-				<< i << "\t" << rcs << "\t" << rcs_v << "\t" << rcs_h
-				<< std::endl;
 		}
 		size_t mem = solver.computeMem();
 		delete[] I_solve;
@@ -428,82 +437,218 @@ namespace RCSUtils {
 	inline void computeMonoStatic_PMCHWT(SolverType& solver, const RCSExportConfig& cfg, ComputeVFunc computeV) {
 		auto rcsFile = cfg.openFile("_RCS", "txt");
 		if (!rcsFile.is_open()) throw std::runtime_error("Cannot open RCS file");
-
-		int numPoints = calculateNumPoints(cfg.scaThetaStart, cfg.scaPhiStart,
-			cfg.scaThetaEnd, cfg.scaPhiEnd, cfg.scaStep);
+		const int thetaNum = calculateAngleCount(cfg.scaThetaStart, cfg.scaThetaEnd, cfg.scaStep);
+		const int phiNum = calculateAngleCount(cfg.scaPhiStart, cfg.scaPhiEnd, cfg.scaStep);
+		const int totalPoints = thetaNum * phiNum;
 		int totalRow = 2 * solver.row;
+		int idx = 0;
+		for (int it = 0; it < thetaNum; ++it) {
+			double th_mono = calculateAngleAt(
+				cfg.scaThetaStart, cfg.scaThetaEnd, cfg.scaStep, it, thetaNum);
+			for (int ip = 0; ip < phiNum; ++ip, ++idx) {
+				double ph_mono = calculateAngleAt(
+					cfg.scaPhiStart, cfg.scaPhiEnd, cfg.scaStep, ip, phiNum);
+				std::string pol_wave = cfg.polWaveStr();
+				double data_pol = (pol_wave == "V") ? 0.0 : 90.0;
 
-		for (int idx = 0; idx < numPoints; ++idx) {
-			double th_mono, ph_mono;
-			if (std::abs(cfg.scaThetaEnd - cfg.scaThetaStart) < 1e-6) {
-				th_mono = cfg.scaThetaStart;
-				ph_mono = cfg.scaPhiStart + idx * cfg.scaStep;
+				double kinc[3], einc[3], hinc[3];
+				EMSource pw;
+				pw.initPW(data_pol, th_mono, ph_mono);
+				kinc[0] = pw.vW(0); kinc[1] = pw.vW(1); kinc[2] = pw.vW(2);
+				einc[0] = pw.vE(0); einc[1] = pw.vE(1); einc[2] = pw.vE(2);
+				hinc[0] = pw.vH(0); hinc[1] = pw.vH(1); hinc[2] = pw.vH(2);
+
+				computeV(solver, kinc, einc, hinc);
+
+				int itr_max = 2 * solver.row, mr = 50;
+				double tol_abs = 1.0e-8;
+				double tol_rel = 1.0e-4;
+				std::complex<double>* I_solve = new std::complex<double>[totalRow];
+				std::complex<double>* Vec_R = new std::complex<double>[totalRow];
+				for (int i = 0; i < totalRow; ++i) {
+					I_solve[i] = 0.0;
+					Vec_R[i] = solver.Vm[i];
+				}
+				solver.matrix_solver(totalRow, I_solve, Vec_R,
+					itr_max, mr, tol_abs, tol_rel);
+
+				std::complex<double>* I_J = I_solve;
+				std::complex<double>* I_M = I_solve + solver.row;
+
+				std::vector<std::complex<double>> RCS_pre(3, 0.0);
+				RCSUtils::calculateRCS_PMCHWT(solver, I_J, I_M, RCS_pre,
+					solver.wave.k1(), solver.wave.k2(), solver.wave.eta1(), solver.wave.eta2(),
+					th_mono, ph_mono);
+
+				double vec_v[3] = { pw.vTh(0), pw.vTh(1), pw.vTh(2) };
+				double vec_h[3] = { pw.vPh(0), pw.vPh(1), pw.vPh(2) };
+				std::complex<double> E_v = vec_v[0] * RCS_pre[0]
+					+ vec_v[1] * RCS_pre[1] + vec_v[2] * RCS_pre[2];
+				std::complex<double> E_h = vec_h[0] * RCS_pre[0]
+					+ vec_h[1] * RCS_pre[1] + vec_h[2] * RCS_pre[2];
+				double rcs = 10.0 * log10((norm(E_v) + norm(E_h)) / (4.0 * Pi));
+				double rcs_v = 10.0 * log10(norm(E_v) / (4.0 * Pi));
+				double rcs_h = 10.0 * log10(norm(E_h) / (4.0 * Pi));
+				rcsFile << std::fixed << std::setprecision(12);
+				rcsFile << std::setw(16) << th_mono << "\t" << ph_mono << "\t"
+					<< idx << "\t" << rcs << "\t" << rcs_v << "\t" << rcs_h
+					<< std::endl;
+				std::cout << "PMCHWT mono angle point " << (idx + 1) << " / " << totalPoints
+					<< " completed: theta=" << th_mono << ", phi=" << ph_mono << std::endl;
+
+				delete[] I_solve;
+				delete[] Vec_R;
 			}
-			else {
-				th_mono = cfg.scaThetaStart + idx * cfg.scaStep;
-				ph_mono = cfg.scaPhiStart;
-			}
-			std::string pol_wave = cfg.polWaveStr();
-			double data_pol = (pol_wave == "V") ? 0.0 : 90.0;
-
-			double kinc[3], einc[3], hinc[3];
-			EMSource pw;
-			pw.initPW(data_pol, th_mono, ph_mono);
-			kinc[0] = pw.vW(0); kinc[1] = pw.vW(1); kinc[2] = pw.vW(2);
-			einc[0] = pw.vE(0); einc[1] = pw.vE(1); einc[2] = pw.vE(2);
-			hinc[0] = pw.vH(0); hinc[1] = pw.vH(1); hinc[2] = pw.vH(2);
-
-			computeV(solver, kinc, einc, hinc);
-
-			int itr_max = 2 * solver.row, mr = 50;
-			double tol_abs = 1.0e-8;
-			double tol_rel = 1.0e-4;
-			std::complex<double>* I_solve = new std::complex<double>[totalRow];
-			std::complex<double>* Vec_R = new std::complex<double>[totalRow];
-			for (int i = 0; i < totalRow; ++i) {
-				I_solve[i] = 0.0;
-				Vec_R[i] = solver.Vm[i];
-			}
-			solver.matrix_solver(totalRow, I_solve, Vec_R,
-				itr_max, mr, tol_abs, tol_rel);
-
-			std::complex<double>* I_J = I_solve;
-			std::complex<double>* I_M = I_solve + solver.row;
-
-			std::vector<std::complex<double>> RCS_pre(3, 0.0);
-			RCSUtils::calculateRCS_PMCHWT(solver, I_J, I_M, RCS_pre,
-				solver.wave.k1(), solver.wave.k2(), solver.wave.eta1(), solver.wave.eta2(),
-				th_mono, ph_mono);
-
-			double vec_v[3] = { pw.vTh(0), pw.vTh(1), pw.vTh(2) };
-			double vec_h[3] = { pw.vPh(0), pw.vPh(1), pw.vPh(2) };
-			std::complex<double> E_v = vec_v[0] * RCS_pre[0]
-				+ vec_v[1] * RCS_pre[1] + vec_v[2] * RCS_pre[2];
-			std::complex<double> E_h = vec_h[0] * RCS_pre[0]
-				+ vec_h[1] * RCS_pre[1] + vec_h[2] * RCS_pre[2];
-			double rcs = 10.0 * log10((norm(E_v) + norm(E_h)) / (4.0 * Pi));
-			double rcs_v = 10.0 * log10(norm(E_v) / (4.0 * Pi));
-			double rcs_h = 10.0 * log10(norm(E_h) / (4.0 * Pi));
-			rcsFile << std::fixed << std::setprecision(12);
-			rcsFile << std::setw(16) << th_mono << "\t" << ph_mono << "\t"
-				<< idx << "\t" << rcs << "\t" << rcs_v << "\t" << rcs_h
-				<< std::endl;
-
-			delete[] I_solve;
-			delete[] Vec_R;
 		}
 		rcsFile.close();
 		std::cout << "RCS (PMCHW Mono) export completed." << std::endl;
 	}
 
-	template<typename SolverType, typename ComputeVFunc>
-	inline void computeMonoStatic_HSB(SolverType& solver, const RCSExportConfig& cfg,
-		ComputeVFunc computeV, double rho = 1.2)
+	template<typename SolverType>
+	inline void exportHSBSamples(SolverType& solver, const RCSExportConfig& cfg,
+		const std::vector<std::vector<HSBMonoSample>>& rings)
 	{
+		(void)solver;
+		auto sampleFile = cfg.openFile("_FIELD_HSB_SAMPLES", "txt");
+		if (!sampleFile.is_open()) {
+			throw std::runtime_error("Cannot open HSB samples field file");
+		}
+
+		const std::string pol_wave = cfg.polWaveStr();
+		const double data_pol = (pol_wave == "V") ? 0.0 : 90.0;
+		sampleFile << "sample_idx\tring_idx\tring_sample_idx\ttheta_deg\tphi_deg\tphi_order\t"
+			<< "Ev_re\tEv_im\tEh_re\tEh_im\trcs_db\trcs_v_db\trcs_h_db\n";
+		sampleFile << std::fixed << std::setprecision(12);
+
+		int sampleIdx = 0;
+		for (int ringIdx = 0; ringIdx < static_cast<int>(rings.size()); ++ringIdx) {
+			const auto& ring = rings[ringIdx];
+			for (int ringSampleIdx = 0;
+				ringSampleIdx < static_cast<int>(ring.size());
+				++ringSampleIdx) {
+				const HSBMonoSample& sample = ring[ringSampleIdx];
+				const std::vector<std::complex<double>>& RCS_pre = sample.field;
+
+				EMSource pw;
+				pw.initPW(data_pol, sample.thetaDeg, sample.phiDeg);
+				double vec_v[3] = { pw.vTh(0), pw.vTh(1), pw.vTh(2) };
+				double vec_h[3] = { pw.vPh(0), pw.vPh(1), pw.vPh(2) };
+
+				std::complex<double> E_v =
+					vec_v[0] * RCS_pre[0] +
+					vec_v[1] * RCS_pre[1] +
+					vec_v[2] * RCS_pre[2];
+				std::complex<double> E_h =
+					vec_h[0] * RCS_pre[0] +
+					vec_h[1] * RCS_pre[1] +
+					vec_h[2] * RCS_pre[2];
+
+				double rcs = 10.0 * std::log10((std::norm(E_v) + std::norm(E_h)) / (4.0 * Pi));
+				double rcs_v = 10.0 * std::log10(std::norm(E_v) / (4.0 * Pi));
+				double rcs_h = 10.0 * std::log10(std::norm(E_h) / (4.0 * Pi));
+
+				sampleFile << sampleIdx << "\t"
+					<< ringIdx << "\t" << ringSampleIdx << "\t"
+					<< sample.thetaDeg << "\t" << sample.phiDeg << "\t"
+					<< sample.phiOrder << "\t"
+					<< E_v.real() << "\t" << E_v.imag() << "\t"
+					<< E_h.real() << "\t" << E_h.imag() << "\t"
+					<< rcs << "\t" << rcs_v << "\t" << rcs_h << "\n";
+				++sampleIdx;
+			}
+		}
+	}
+
+	template<typename SolverType>
+	inline void exportHSBScanGrid(SolverType& solver, const RCSExportConfig& cfg,
+		const std::vector<std::vector<HSBMonoSample>>& rings)
+	{
+		auto angleCount = [](double start, double end, double step) {
+			const double diff = std::abs(end - start);
+			if (diff < 1.0e-9) {
+				return 1;
+			}
+			return static_cast<int>(std::ceil(diff / step - 1.0e-9)) + 1;
+			};
+		auto angleAt = [](double start, double end, double step, int idx, int count) {
+			if (idx == count - 1) {
+				return end;
+			}
+			const double direction = (end >= start) ? 1.0 : -1.0;
+			return start + direction * idx * step;
+			};
+
+		(void)solver;
 		auto rcsFile = cfg.openFile("_RCS_HSB", "txt");
 		if (!rcsFile.is_open()) {
 			throw std::runtime_error("Cannot open HSB RCS file");
 		}
+
+		std::ofstream fieldFile;
+		if (cfg.exportHSBComplexField) {
+			fieldFile = cfg.openFile("_FIELD_HSB", "txt");
+			if (!fieldFile.is_open()) {
+				throw std::runtime_error("Cannot open HSB complex field file");
+			}
+		}
+
+		const std::string pol_wave = cfg.polWaveStr();
+		const double data_pol = (pol_wave == "V") ? 0.0 : 90.0;
+		const int thetaNum = angleCount(cfg.scaThetaStart, cfg.scaThetaEnd, cfg.scaStep);
+		const int phiNum = angleCount(cfg.scaPhiStart, cfg.scaPhiEnd, cfg.scaStep);
+
+		rcsFile << std::fixed << std::setprecision(12);
+		if (cfg.exportHSBComplexField) {
+			fieldFile << std::fixed << std::setprecision(12);
+		}
+
+		for (int it = 0; it < thetaNum; ++it) {
+			double thetaDeg = angleAt(
+				cfg.scaThetaStart, cfg.scaThetaEnd, cfg.scaStep, it, thetaNum);
+
+			for (int ip = 0; ip < phiNum; ++ip) {
+				double phiDeg = angleAt(
+					cfg.scaPhiStart, cfg.scaPhiEnd, cfg.scaStep, ip, phiNum);
+				const double phiInterpDeg = my_hsb::normalizePhiDeg(phiDeg);
+
+				std::vector<std::complex<double>> RCS_pre =
+					my_hsb::interpolateHSBField(rings, thetaDeg, phiInterpDeg);
+
+				EMSource pw;
+				pw.initPW(data_pol, thetaDeg, phiDeg);
+				double vec_v[3] = { pw.vTh(0), pw.vTh(1), pw.vTh(2) };
+				double vec_h[3] = { pw.vPh(0), pw.vPh(1), pw.vPh(2) };
+
+				std::complex<double> E_v =
+					vec_v[0] * RCS_pre[0] +
+					vec_v[1] * RCS_pre[1] +
+					vec_v[2] * RCS_pre[2];
+				std::complex<double> E_h =
+					vec_h[0] * RCS_pre[0] +
+					vec_h[1] * RCS_pre[1] +
+					vec_h[2] * RCS_pre[2];
+
+				double rcs = 10.0 * std::log10((std::norm(E_v) + std::norm(E_h)) / (4.0 * Pi));
+				double rcs_v = 10.0 * std::log10(std::norm(E_v) / (4.0 * Pi));
+				double rcs_h = 10.0 * std::log10(std::norm(E_h) / (4.0 * Pi));
+
+				rcsFile << std::setw(16) << thetaDeg << "\t" << phiDeg << "\t"
+					<< it << "\t" << ip << "\t"
+					<< rcs << "\t" << rcs_v << "\t" << rcs_h << "\n";
+
+				if (cfg.exportHSBComplexField) {
+					fieldFile << std::setw(16) << thetaDeg << "\t" << phiDeg << "\t"
+						<< it << "\t" << ip << "\t"
+						<< E_v.real() << "\t" << E_v.imag() << "\t"
+						<< E_h.real() << "\t" << E_h.imag() << "\n";
+				}
+			}
+		}
+	}
+	template<typename SolverType, typename ComputeVFunc>
+	inline void computeMonoStatic_HSB(SolverType& solver, const RCSExportConfig& cfg,
+		ComputeVFunc computeV, double rho = 1.2)
+	{
 		const std::string pol_wave = cfg.polWaveStr();
 		const double data_pol = (pol_wave == "V") ? 0.0 : 90.0;
 		const bool isPMCHWT = (solver.integralEquType_ == 2);
@@ -511,6 +656,16 @@ namespace RCSUtils {
 		const double radius = my_hsb::estimateBoundingSphereRadius(solver);
 		const double W = std::max(1.0, rho * solver.wave.k1_abs() * radius);
 		const int thetaCount = std::max(2, static_cast<int>(std::ceil(2.0 * W)));
+		int expectedSampleCount = 0;
+		for (int m = 1; m <= thetaCount; ++m) {
+			const double theta = Pi * static_cast<double>(m) /
+				static_cast<double>(thetaCount + 1);
+			const int phiOrder = std::max(
+				1, static_cast<int>(std::ceil(W * std::sin(theta))));
+			expectedSampleCount += 2 * phiOrder + 1;
+		}
+		std::cout << "HSB accurate sample points to compute = "
+			<< expectedSampleCount << std::endl;
 
 		std::vector<std::vector<HSBMonoSample>> rings;
 		rings.reserve(thetaCount);
@@ -554,6 +709,9 @@ namespace RCSUtils {
 				solver.matrix_solver(
 					totalRow, I_solve.data(), Vec_R.data(),
 					itr_max, mr, tol_abs, tol_rel);
+				std::cout << "HSB accurate sample point "
+					<< (sampleCount + 1) << " / " << expectedSampleCount
+					<< " solved" << std::endl;
 
 				std::vector<std::complex<double>> RCS_pre(3, 0.0);
 				if (isPMCHWT) {
@@ -582,62 +740,15 @@ namespace RCSUtils {
 			rings.push_back(std::move(ring));
 		}
 
-		const int numPoints = calculateNumPoints(
-			cfg.scaThetaStart, cfg.scaPhiStart,
-			cfg.scaThetaEnd, cfg.scaPhiEnd, cfg.scaStep);
-
-		for (int idx = 0; idx < numPoints; ++idx) {
-			double th_mono = 0.0;
-			double ph_mono = 0.0;
-			if (std::abs(cfg.scaThetaEnd - cfg.scaThetaStart) < 1.0e-6) {
-				th_mono = cfg.scaThetaStart;
-				ph_mono = cfg.scaPhiStart + idx * cfg.scaStep;
-			}
-			else {
-				th_mono = cfg.scaThetaStart + idx * cfg.scaStep;
-				ph_mono = cfg.scaPhiStart;
-			}
-
-			std::vector<std::complex<double>> RCS_pre =
-				my_hsb::interpolateHSBField(rings, th_mono, ph_mono);
-
-			EMSource pw;
-			pw.initPW(data_pol, th_mono, ph_mono);
-			double vec_v[3] = { pw.vTh(0), pw.vTh(1), pw.vTh(2) };
-			double vec_h[3] = { pw.vPh(0), pw.vPh(1), pw.vPh(2) };
-
-			std::complex<double> E_v =
-				vec_v[0] * RCS_pre[0] +
-				vec_v[1] * RCS_pre[1] +
-				vec_v[2] * RCS_pre[2];
-			std::complex<double> E_h =
-				vec_h[0] * RCS_pre[0] +
-				vec_h[1] * RCS_pre[1] +
-				vec_h[2] * RCS_pre[2];
-
-			double rcs = 10.0 * std::log10((std::norm(E_v) + std::norm(E_h)) / (4.0 * Pi));
-			double rcs_v = 10.0 * std::log10((std::norm(E_v)) / (4.0 * Pi));
-			double rcs_h = 10.0 * std::log10((std::norm(E_h)) / (4.0 * Pi));
-
-			rcsFile << std::fixed << std::setprecision(12);
-			rcsFile << std::setw(16) << th_mono << "\t" << ph_mono << "\t" << idx << "\t"
-				<< rcs << "\t" << rcs_v << "\t" << rcs_h << std::endl;
+		if (cfg.exportHSBSamples) {
+			RCSUtils::exportHSBSamples(solver, cfg, rings);
 		}
+		RCSUtils::exportHSBScanGrid(solver, cfg, rings);
 
 		const size_t mem = solver.computeMem();
-		rcsFile << "\n\nHSB rho = " << rho << "\n";
-		rcsFile << "HSB radius = " << radius << "\n";
-		rcsFile << "HSB W = " << W << "\n";
-		rcsFile << "HSB sample points = " << sampleCount << "\n";
-		rcsFile << "Algorithm memory = "
-			<< mem / (1024.0 * 1024.0) << " MB\n";
-		rcsFile.close();
-
 		std::cout << "HSB sample points = " << sampleCount << std::endl;
 		std::cout << "Algorithm memory = "
 			<< mem / (1024.0 * 1024.0) << " MB" << std::endl;
 		std::cout << "RCS HSB export completed." << std::endl;
 	}
 }
-
-#endif // !RCS_H
