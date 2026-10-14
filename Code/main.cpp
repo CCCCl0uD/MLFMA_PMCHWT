@@ -4,6 +4,7 @@
 #include "FMM.h"
 #include "MLFMM.h"
 #include "RWGGenerator.h"
+#include "RunLogger.h"
 
 RCSExportConfig createRCSExportConfig(const std::string& inputFile,
 	int selectAlgorithm, int selectIntegralEqu,
@@ -54,7 +55,7 @@ RCSExportConfig createRCSExportConfig(const std::string& inputFile,
 
 //\f:Times New Roman(f = 0.8GHz)
 //\f:Times New Roman(HH polarizations)
-//\g(q)\ - (\f:Times New Roman(i)) = \g(q)\ - (\f:Times New Roman(s)) = 90\ + (ã€?, \g(f)\ - (\f:Times New Roman(i)) = 0\ + (ã€?
+//\g(q)\ - (\f:Times New Roman(i)) = \g(q)\ - (\f:Times New Roman(s)) = 90\ + (ï¿½?, \g(f)\ - (\f:Times New Roman(i)) = 0\ + (ï¿½?
 //\g(e)\ - (\f:Times New Roman(r)) = (4, -0.001)
 
 int main(int argc, char* argv[]) {
@@ -85,7 +86,8 @@ int main(int argc, char* argv[]) {
 	// ------- Single -------
 	std::vector<Point> points;
 	std::vector<FaceElement> faces;
-	const std::string inputFile = "D:\\MyCode\\PMCHWT_MLFMA\\DATA\\SLICY_like_1e9\\SLICY_like_1e9.nas";
+	const std::string inputFile = "D:\\MyCode\\PMCHWT_MLFMA\\DATA\\Cube_0d5_0f20\\Cube_0d5_0f20_1e9.nas";
+	const std::string movingPathFile = "D:\\MyCode\\PMCHWT_MLFMA\\DATA\\Cube_0d5_0f20\\moving_path_Cube_1e9_z.txt";
 	/************************************************************************/
 	double freq = 1.0e9, E0 = 1.0;
 	double inc_th = 90.0, inc_ph = 0.0;
@@ -94,15 +96,38 @@ int main(int argc, char* argv[]) {
 	double step = 1;
 	int N_points = 7;// 1, 3, 4, 6, 7, 12, 13, 16
 
-	std::string selectMono_Dual = "dual";// mono / dual
+	std::string selectMono_Dual = "mono";// mono / dual
 	std::string polarization = "v";// horizontal->90 / vertical->0
 	int selectAlgorithm = 2;// 0==>MoM;1==>FMM;2==>MLFMM
 	int selectIntegralEqu = 1;// 0==>EFIE;1==>CFIE;2==>PMCHWT
 	int selectMatrixSolver = 0;// 0==>GMRES;1==>CGS
-	bool useHSBMono = false;// true==>open HSBMono;false==>off HSBDual
-	double HSBMonoFactor = 1.2;
-	bool exportHSBComplexField = false;
-	bool exportHSBSamples = false;
+	// ========= Mono-FSB-MLFMA =========
+	bool useFSBMono = false;// true==>open FSBMono;false==>off
+	double FSBMonoFactor = 1.2;// FSB Ultra-bandwidth factor==>rho
+	bool exportFSBComplexField = false;// Export the complex electric field after FSB interpolation
+	bool exportFSBSamples = false;// Export the FSB samples after FSB interpolation
+	// ======= Radar Position ========
+	double radarX = 0.5; // monostatic radar global x
+	double radarY = 0.5;
+	double radarZ = 0.7071067812;
+	// ======= FSB-MLFMA-Moving ========
+	bool useFSBMLFMAMoving = false; // FSB moving path mode
+	double movingAngleMarginDeg = 2.0; // FSB moving angular margin
+	double movingAngleMergeTolDeg = 0.25; // moving angle merge tolerance
+	bool exportMovingAngles = true; // output moving angle map
+	bool exportMovingComplexField = false; // output moving complex field
+	bool exportMovingSamples = true; // output FSB moving samples
+	// ======= Accurate-MLFMA-Moving ========
+	bool useAccurateMLFMAMoving = true; // true ==> solve every moving state accurately
+	// ======= ACA-RHS-MLFMA-Moving ========
+	bool useACARHSMoving = false; // true ==> open ACA-RHS-MLFMA-Moving
+	double acaRHSTol = 1.0e-3;// ACA low-rank approximation tolerance
+	int acaRHSMaxRank = 0;// ACA maximum rank constraint, 0==>No manual restriction; >0==>Use up to the specified rank
+	double acaRHSPivotEps = 1.0e-14;// ACA Pivot Threshold
+	int acaRHSCheckCount = 10;// ACA inspection sample size
+	bool exportACARHSCheck = true;// export ACA decomposition factor
+	bool exportACARHSFactors = false;// Factor matrices obtained from ACA-RHS low-rank decomposition
+	// ======= Die =======
 	std::complex<double> epsilonR(1.0, -0.01);
 	std::complex<double> muR(1.0, 0.0);
 	/************************************************************************/
@@ -112,14 +137,32 @@ int main(int argc, char* argv[]) {
 	std::ios::sync_with_stdio(false);
 	std::cin.tie(nullptr);
 	/************************************************************************/
-	int debugInfoToFile = 0;// 0=>offï¼?=>on
+	int debugInfoToFile = 0;// 0=>offï¿½?=>on
 	/************************************************************************/
 	RCSExportConfig cfg = createRCSExportConfig(inputFile, selectAlgorithm, selectIntegralEqu, selectMono_Dual, polarization,
 		inc_th, inc_ph, sca_th_s, sca_ph_s, sca_th_f, sca_ph_f, step, N_points);
-	cfg.useHSBMono = useHSBMono;
-	cfg.hsbRho = HSBMonoFactor;
-	cfg.exportHSBComplexField = exportHSBComplexField;
-	cfg.exportHSBSamples = exportHSBSamples;
+	cfg.useFSBMono = useFSBMono;
+	cfg.fsbRho = FSBMonoFactor;
+	cfg.exportFSBComplexField = exportFSBComplexField;
+	cfg.exportFSBSamples = exportFSBSamples;
+	cfg.useFSBMLFMAMoving = useFSBMLFMAMoving;
+	cfg.movingPathFile = movingPathFile;
+	cfg.radarX = radarX;
+	cfg.radarY = radarY;
+	cfg.radarZ = radarZ;
+	cfg.movingAngleMarginDeg = movingAngleMarginDeg;
+	cfg.movingAngleMergeTolDeg = movingAngleMergeTolDeg;
+	cfg.exportMovingAngles = exportMovingAngles;
+	cfg.exportMovingComplexField = exportMovingComplexField;
+	cfg.exportMovingSamples = exportMovingSamples;
+	cfg.useAccurateMLFMAMoving = useAccurateMLFMAMoving;
+	cfg.useACARHSMoving = useACARHSMoving;
+	cfg.acaRHSTol = acaRHSTol;
+	cfg.acaRHSMaxRank = acaRHSMaxRank;
+	cfg.acaRHSPivotEps = acaRHSPivotEps;
+	cfg.exportACARHSCheck = exportACARHSCheck;
+	cfg.acaRHSCheckCount = acaRHSCheckCount;
+	cfg.exportACARHSFactors = exportACARHSFactors;
 	/************************************************************************/
 	double polVal = (polarization == "v") ? 0.0 : 90.0;
 	EMSource wave(freq, polVal);
@@ -130,6 +173,12 @@ int main(int argc, char* argv[]) {
 		cfg.epsilonR = epsilonR;
 		cfg.muR = muR;
 		wave.initDielectric(epsilonR, muR);
+	}
+
+	cfg.validate();
+	ScopedRunLogger runLogger(cfg.buildFilePath("_RUN_LOG", "txt"));
+	if (runLogger.enabled()) {
+		std::cout << "Run log file: " << runLogger.path() << std::endl;
 	}
 
 	gaussPoints gausspoint(N_points);

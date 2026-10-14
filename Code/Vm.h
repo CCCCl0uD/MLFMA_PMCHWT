@@ -6,7 +6,124 @@
 #include "GaussPoints.h"
 #include "OverloadAlgo.h"
 
+#include <array>
+#include <stdexcept>
+
 namespace RHS {
+	inline std::complex<double> computeV_E_entry(const std::vector<RWGBase>& rwgs, const gaussPoints& gp,
+		const std::complex<double> k_, const double kInc[3], const double eInc[3], int rwgid)
+	{
+		if (rwgid < 0 || rwgid >= static_cast<int>(rwgs.size())) {
+			throw std::out_of_range("RHS::computeV_E_entry rwgid is out of range.");
+		}
+
+		const RWGBase* rwgTemp = &rwgs[rwgid];
+		const double lm = rwgTemp->edgeLength;
+		std::complex<double> value(0.0, 0.0);
+		std::array<double, 3> r, rho;
+
+		for (int i = 0; i < gp.N_points_; ++i) {
+			r = {
+				gp.l1[i] * rwgTemp->positiveFace->vertex1->x + gp.l2[i] * rwgTemp->positiveFace->vertex2->x + gp.l3[i] * rwgTemp->positiveFace->vertex3->x,
+				gp.l1[i] * rwgTemp->positiveFace->vertex1->y + gp.l2[i] * rwgTemp->positiveFace->vertex2->y + gp.l3[i] * rwgTemp->positiveFace->vertex3->y,
+				gp.l1[i] * rwgTemp->positiveFace->vertex1->z + gp.l2[i] * rwgTemp->positiveFace->vertex2->z + gp.l3[i] * rwgTemp->positiveFace->vertex3->z
+			};
+
+			rho = {
+				r[0] - rwgTemp->freeVertexPositive->x,
+				r[1] - rwgTemp->freeVertexPositive->y,
+				r[2] - rwgTemp->freeVertexPositive->z
+			};
+			std::complex<double> phase = k_ * (kInc[0] * r[0] + kInc[1] * r[1] + kInc[2] * r[2]);
+			std::complex<double> e_ = exp(-J * phase);
+			value += lm * gp.weight[i] * dot(eInc, rho) * e_;
+
+			r = {
+				gp.l1[i] * rwgTemp->negativeFace->vertex1->x + gp.l2[i] * rwgTemp->negativeFace->vertex2->x + gp.l3[i] * rwgTemp->negativeFace->vertex3->x,
+				gp.l1[i] * rwgTemp->negativeFace->vertex1->y + gp.l2[i] * rwgTemp->negativeFace->vertex2->y + gp.l3[i] * rwgTemp->negativeFace->vertex3->y,
+				gp.l1[i] * rwgTemp->negativeFace->vertex1->z + gp.l2[i] * rwgTemp->negativeFace->vertex2->z + gp.l3[i] * rwgTemp->negativeFace->vertex3->z
+			};
+
+			rho = {
+				rwgTemp->freeVertexNegative->x - r[0],
+				rwgTemp->freeVertexNegative->y - r[1],
+				rwgTemp->freeVertexNegative->z - r[2]
+			};
+			phase = k_ * (kInc[0] * r[0] + kInc[1] * r[1] + kInc[2] * r[2]);
+			e_ = exp(-J * phase);
+			value += lm * gp.weight[i] * dot(eInc, rho) * e_;
+		}
+
+		return value;
+	}
+
+	inline std::complex<double> computeV_M_entry(const std::vector<RWGBase>& rwgs, const gaussPoints& gp,
+		const std::complex<double> k_, const double kInc[3], const double hInc[3], int rwgid)
+	{
+		if (rwgid < 0 || rwgid >= static_cast<int>(rwgs.size())) {
+			throw std::out_of_range("RHS::computeV_M_entry rwgid is out of range.");
+		}
+
+		const RWGBase* rwgTemp = &rwgs[rwgid];
+		const double lm = rwgTemp->edgeLength;
+		std::complex<double> value(0.0, 0.0);
+		std::array<double, 3> r, rho;
+
+		const std::array<double, 3> npos = {
+			rwgTemp->positiveFace->externalNormalVector.x,
+			rwgTemp->positiveFace->externalNormalVector.y,
+			rwgTemp->positiveFace->externalNormalVector.z
+		};
+
+		const std::array<double, 3> nneg = {
+			rwgTemp->negativeFace->externalNormalVector.x,
+			rwgTemp->negativeFace->externalNormalVector.y,
+			rwgTemp->negativeFace->externalNormalVector.z
+		};
+
+		for (int i = 0; i < gp.N_points_; ++i) {
+			r = {
+				gp.l1[i] * rwgTemp->positiveFace->vertex1->x + gp.l2[i] * rwgTemp->positiveFace->vertex2->x + gp.l3[i] * rwgTemp->positiveFace->vertex3->x,
+				gp.l1[i] * rwgTemp->positiveFace->vertex1->y + gp.l2[i] * rwgTemp->positiveFace->vertex2->y + gp.l3[i] * rwgTemp->positiveFace->vertex3->y,
+				gp.l1[i] * rwgTemp->positiveFace->vertex1->z + gp.l2[i] * rwgTemp->positiveFace->vertex2->z + gp.l3[i] * rwgTemp->positiveFace->vertex3->z
+			};
+
+			rho = {
+				r[0] - rwgTemp->freeVertexPositive->x,
+				r[1] - rwgTemp->freeVertexPositive->y,
+				r[2] - rwgTemp->freeVertexPositive->z
+			};
+			std::complex<double> phase = k_ * (kInc[0] * r[0] + kInc[1] * r[1] + kInc[2] * r[2]);
+			std::complex<double> e_ = exp(-J * phase);
+			value += lm * gp.weight[i] * my_math::cross_dot(npos, hInc, rho) * e_;
+
+			r = {
+				gp.l1[i] * rwgTemp->negativeFace->vertex1->x + gp.l2[i] * rwgTemp->negativeFace->vertex2->x + gp.l3[i] * rwgTemp->negativeFace->vertex3->x,
+				gp.l1[i] * rwgTemp->negativeFace->vertex1->y + gp.l2[i] * rwgTemp->negativeFace->vertex2->y + gp.l3[i] * rwgTemp->negativeFace->vertex3->y,
+				gp.l1[i] * rwgTemp->negativeFace->vertex1->z + gp.l2[i] * rwgTemp->negativeFace->vertex2->z + gp.l3[i] * rwgTemp->negativeFace->vertex3->z
+			};
+
+			rho = {
+				rwgTemp->freeVertexNegative->x - r[0],
+				rwgTemp->freeVertexNegative->y - r[1],
+				rwgTemp->freeVertexNegative->z - r[2]
+			};
+			phase = k_ * (kInc[0] * r[0] + kInc[1] * r[1] + kInc[2] * r[2]);
+			e_ = exp(-J * phase);
+			value += lm * gp.weight[i] * my_math::cross_dot(nneg, hInc, rho) * e_;
+		}
+
+		return value;
+	}
+
+	inline std::complex<double> computeV_C_entry(const std::vector<RWGBase>& rwgs, const gaussPoints& gp,
+		const std::complex<double> k_, const double kInc[3], const double eInc[3],
+		const double hInc[3], const double alpha_, int rwgid)
+	{
+		return alpha_ * computeV_E_entry(rwgs, gp, k_, kInc, eInc, rwgid) +
+			(1.0 - alpha_) * computeV_M_entry(rwgs, gp, k_, kInc, hInc, rwgid);
+	}
+
 	inline void computeV_E(const std::vector<RWGBase>& rwgs, const gaussPoints& gp,
 		const std::complex<double> k_, double kInc[3], double eInc[3],
 		std::vector<std::complex<double>>& Vm)

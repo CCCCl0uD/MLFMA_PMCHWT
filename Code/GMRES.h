@@ -6,10 +6,19 @@
 #include <algorithm>
 #include <cmath>
 #include <complex>
-#include <vector>
+#include <iomanip>
 #include <iostream>
+#include <sstream>
+#include <vector>
 
 namespace MGMRES {
+	inline std::string formatResidual7(double value)
+	{
+		std::ostringstream oss;
+		oss << std::fixed << std::setprecision(7) << value;
+		return oss.str();
+	}
+
 	// 辅助函数：共轭点积
 	inline std::complex<double> dot_conj(int n, const std::complex<double>* a, const std::complex<double>* b) {
 		std::complex<double> sum = 0.0;
@@ -153,7 +162,7 @@ namespace MGMRES {
 
 				error = std::abs(s[k + 1]) / bnorm;
 				if (verbose) {
-					std::cout << "Cycle " << restart_cycle << "." << k + 1 << " Res: " << error << "\n";
+					std::cout << "Cycle " << restart_cycle << "." << k + 1 << " Res: " << formatResidual7(error) << "\n";
 				}
 				if (error < tol_rel || error < tol_abs) {
 					converged_inner = true;
@@ -194,15 +203,15 @@ namespace MGMRES {
 			error = rnorm / bnorm;
 
 			if (verbose && !converged_inner) {
-				std::cout << "Restart cycle " << restart_cycle << " exact residual: " << error << "\n";
+				std::cout << "Restart cycle " << restart_cycle << " exact residual: " << formatResidual7(error) << "\n";
 			}
 
 			if (error < tol_rel || error < tol_abs) {
-				if (verbose) std::cout << "GMRES converged! Final residual: " << error << "\n";
+				if (verbose) std::cout << "GMRES converged! Final residual: " << formatResidual7(error) << "\n";
 				return true;
 			}
 			if (total_iter >= itr_max) {
-				if (verbose) std::cout << "GMRES reached max iterations, final residual: " << error << "\n";
+				if (verbose) std::cout << "GMRES reached max iterations, final residual: " << formatResidual7(error) << "\n";
 				return false;
 			}
 			//if (error > 100.0 * tol_rel && restart_cycle > 12) {

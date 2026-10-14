@@ -16,6 +16,7 @@
 #include <iostream>
 #include <iomanip>
 #include <chrono>
+#include <cstddef>
 #include <omp.h>
 
 namespace Zmartix {
@@ -30,6 +31,35 @@ namespace Zmartix {
 		}
 		std::cout << "] " << std::setw(3) << int(progress * 100.0) << "%";
 		std::cout.flush();
+	}
+
+	template<typename T>
+	inline std::size_t estimateVector2DBytes(const std::vector<std::vector<T>>& values) {
+		std::size_t bytes = sizeof(values);
+		for (const auto& row : values) {
+			bytes += sizeof(row);
+			bytes += sizeof(T) * row.capacity();
+		}
+		return bytes;
+	}
+
+	inline double bytesToMiB(std::size_t bytes) {
+		return static_cast<double>(bytes) / (1024.0 * 1024.0);
+	}
+
+	inline void printZNearMemoryInfo(
+		const char* label,
+		const std::vector<std::vector<std::complex<double>>>& Z_near,
+		const std::vector<std::vector<int>>& Z_near_id)
+	{
+		const std::size_t valueBytes = estimateVector2DBytes(Z_near);
+		const std::size_t idBytes = estimateVector2DBytes(Z_near_id);
+		const std::size_t totalBytes = valueBytes + idBytes;
+		std::cout << "Info: Z_near (" << label << ") memory: values = "
+			<< std::fixed << std::setprecision(3) << bytesToMiB(valueBytes)
+			<< " MB, ids = " << bytesToMiB(idBytes)
+			<< " MB, total = " << bytesToMiB(totalBytes)
+			<< " MB (Zmartix.h)" << std::endl;
 	}
 
 	inline void computeZ_pec_efie(const std::vector<RWGBase>& rwgs, const int row,
@@ -274,6 +304,7 @@ namespace Zmartix {
 			auto t_elapsed = std::chrono::duration_cast<std::chrono::microseconds>(t_end - t_start);
 			std::cout << "\nInfo: Z_near (EFIE) done, elapsed: " << t_elapsed.count() / 1000.0
 				<< " ms, total RWGs: " << totalRWG << " (Zmartix.h)" << std::endl;
+			printZNearMemoryInfo("EFIE", Z_near, Z_near_id);
 		}
 	}
 
@@ -364,8 +395,9 @@ namespace Zmartix {
 			progressThread.join();
 			auto t_end = std::chrono::high_resolution_clock::now();
 			auto t_elapsed = std::chrono::duration_cast<std::chrono::microseconds>(t_end - t_start);
-			std::cout << "\nInfo: Z_near (EFIE) done, elapsed: " << t_elapsed.count() / 1000.0
+			std::cout << "\nInfo: Z_near (MFIE) done, elapsed: " << t_elapsed.count() / 1000.0
 				<< " ms, total RWGs: " << totalRWG << " (Zmartix.h)" << std::endl;
+			printZNearMemoryInfo("MFIE", Z_near, Z_near_id);
 		}
 	}
 
@@ -461,6 +493,7 @@ namespace Zmartix {
 			auto t_elapsed = std::chrono::duration_cast<std::chrono::microseconds>(t_end - t_start);
 			std::cout << "\nInfo: Z_near (CFIE) done, elapsed: " << t_elapsed.count() / 1000.0
 				<< " ms, total RWGs: " << totalRWG << " (Zmartix.h)" << std::endl;
+			printZNearMemoryInfo("CFIE", Z_near, Z_near_id);
 		}
 	}
 
@@ -639,6 +672,7 @@ namespace Zmartix {
 			auto t_elapsed = std::chrono::duration_cast<std::chrono::microseconds>(t_end - t_start);
 			std::cout << "\nInfo: Z_near (PMCHWT) done, elapsed: " << t_elapsed.count() / 1000.0
 				<< " ms, total RWGs: " << totalRWG << " (Zmartix.h)" << std::endl;
+			printZNearMemoryInfo("PMCHWT", Z_near, Z_near_id);
 		}
 	}
 }

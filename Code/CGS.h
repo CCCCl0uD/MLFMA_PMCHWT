@@ -6,11 +6,20 @@
 #include <algorithm>
 #include <cmath>
 #include <complex>
+#include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <type_traits>
 #include <vector>
 
 namespace MCGS {
+	inline std::string formatResidual7(double value)
+	{
+		std::ostringstream oss;
+		oss << std::fixed << std::setprecision(7) << value;
+		return oss.str();
+	}
+
 	namespace detail {
 		using Complex = std::complex<double>;
 
@@ -211,13 +220,13 @@ namespace MCGS {
 				// RSS = ||r|| / ||b||。
 				RSS = detail::norm2(n, r.data()) / bnorm;
 				if (verbose) {
-					std::cout << "Iter " << iter << " Res: " << RSS << "\n";
+					std::cout << "Iter " << iter << " Res: " << formatResidual7(RSS) << "\n";
 				}
 
 				if (RSS < tol) {
 					if (verbose) {
 						std::cout << "CGS converged! Final residual: "
-							<< RSS << "\n";
+							<< formatResidual7(RSS) << "\n";
 					}
 					return true;
 				}
@@ -228,7 +237,7 @@ namespace MCGS {
 
 			if (verbose) {
 				std::cout << "CGS reached max iterations, final residual: "
-					<< RSS << "\n";
+					<< formatResidual7(RSS) << "\n";
 			}
 			return false;
 		}

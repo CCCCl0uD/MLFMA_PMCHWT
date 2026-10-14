@@ -4,16 +4,21 @@
 #define OVERLOADALGO_H
 
 #include "PhyConstant.h"
+#include "MyStruct.h"
+#include "MovingTarget.h"
 
 #include <array>
 #include <cmath>
 #include <complex>
+#include <limits>
+#include <set>
+#include <utility>
 #include <vector>
 #include <boost/math/special_functions/legendre.hpp>
 
-// ÖØÔØº¯ÊýÓÃÓÚ¼ÆËãÒ»×é¸ø¶¨¸ºÔØµÄ½á¹û
+// ï¿½ï¿½ï¿½Øºï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ú¼ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ØµÄ½ï¿½ï¿½
 /****************************************************************************/
-//²æ³Ë
+//ï¿½ï¿½ï¿½
 /****************************************************************************/
 inline void cross(double* res, double* u, double* v) {
 	res[0] = u[1] * v[2] - u[2] * v[1];
@@ -71,7 +76,7 @@ inline void cross(Complex3D& res, const double* u, const Complex3D& v) {
 }
 
 /****************************************************************************/
-//µã³Ë
+//ï¿½ï¿½ï¿½
 /****************************************************************************/
 template<typename T, typename C>
 inline C dot(T* u, C* v) {
@@ -92,7 +97,7 @@ inline C dot_conj(Complex3D& u, Complex3D& v) {
 	return u.x * std::conj(v.x) + u.y * std::conj(v.y) + u.z * std::conj(v.z);
 }
 /****************************************************************************/
-//³ý·¨
+//ï¿½ï¿½ï¿½ï¿½
 /****************************************************************************/
 template<typename T>
 inline void div(T* res, T* u, double& CONST) {
@@ -108,7 +113,7 @@ inline void div(T& res, T& u, double& CONST) {
 	res[2] = u[2] / CONST;
 }
 /****************************************************************************/
-//³Ë·¨
+//ï¿½Ë·ï¿½
 /****************************************************************************/
 template<typename T, typename C>
 inline void mul(T* res, C* u, T& Const) {
@@ -146,7 +151,7 @@ inline void mul(C* res, T* u, T& Const) {
 }
 
 /****************************************************************************/
-//¼Ó·¨
+//ï¿½Ó·ï¿½
 /****************************************************************************/
 template<typename T, typename C>
 inline void add(C* res, T* u, C* v)
@@ -170,7 +175,7 @@ inline void add_cp(C* res, C* u, C* v) {
 	res[2] = (u[2] + v[2]) / 2;
 }
 /****************************************************************************/
-//¼õ·¨
+//ï¿½ï¿½ï¿½ï¿½
 /****************************************************************************/
 template<typename T>
 inline void sub(T* res, T* u, T* v)
@@ -187,7 +192,7 @@ inline void sub(T& res, T& u, T& v) {
 	res[2] = u[2] - v[2];
 }
 /****************************************************************************/
-//Ä£³¤
+//Ä£ï¿½ï¿½
 /****************************************************************************/
 template<typename T>
 inline T norm2(T* vec) {
@@ -252,7 +257,7 @@ namespace my_memory {
 }// namespace my_memory
 
 namespace my_math {
-	// Å£¶Ù-À­·òÑ··½·¨À´Ñ°ÕÒÀÕÈÃµÂ¶àÏîÊ½µÄ¸ù
+	// Å£ï¿½ï¿½-ï¿½ï¿½ï¿½ï¿½Ñ·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ñ°ï¿½ï¿½ï¿½ï¿½ï¿½ÃµÂ¶ï¿½ï¿½ï¿½Ê½ï¿½Ä¸ï¿½
 	inline double newton_raphson(int n, double x0, double tolerance, int max_iter) {
 		double x = x0;
 		for (int i = 0; i < max_iter; ++i) {
@@ -267,14 +272,14 @@ namespace my_math {
 		return x;
 	}
 
-	// ¼ÆËãnµã¸ßË¹-ÀÕÈÃµÂ»ý·ÖµÄ½ÚµãºÍÈ¨ÖØ
+	// ï¿½ï¿½ï¿½ï¿½nï¿½ï¿½ï¿½Ë¹-ï¿½ï¿½ï¿½ÃµÂ»ï¿½ï¿½ÖµÄ½Úµï¿½ï¿½È¨ï¿½ï¿½
 	inline void gauss_legendre(int n, std::vector<double>& XGL_temp, std::vector<double>& WGL_temp) {
 		XGL_temp.resize(n);
 		WGL_temp.resize(n);
 		const double tolerance = 1e-10;
 		const int max_iter = 100;
 		for (int i = 0; i < (n + 1) / 2; ++i) {
-			// ³õÊ¼²Â²âÖµ
+			// ï¿½ï¿½Ê¼ï¿½Â²ï¿½Öµ
 			double x0 = std::cos(Pi * (i + 0.75) / (n + 0.5));
 			double root = newton_raphson(n, x0, tolerance, max_iter);
 			XGL_temp[i] = -root;
@@ -287,7 +292,7 @@ namespace my_math {
 		}
 	}
 
-	// ÀÕÈÃµÂ¶àÏîÊ½²ÎÊý£¨ÄÚ»ý£©
+	// ï¿½ï¿½ï¿½ÃµÂ¶ï¿½ï¿½ï¿½Ê½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ú»ï¿½ï¿½ï¿½
 	inline double legendrePolynomialParameters(double r[3], double kp[3]) {
 		return r[0] * kp[0] + r[1] * kp[1] + r[2] * kp[2];
 	}
@@ -296,14 +301,14 @@ namespace my_math {
 		return ((x0 - x2) * (x0 - x3)) / ((x1 - x2) * (x1 - x3));
 	}
 
-	// ¼ÆËã (n ¡Á h) ¡¤ r
+	// ï¿½ï¿½ï¿½ï¿½ (n ï¿½ï¿½ h) ï¿½ï¿½ r
 	template<typename Vec1, typename Vec2, typename Vec3>
 	inline double cross_dot(const Vec1& n, const Vec2& h, const Vec3& r) {
-		// ¼ÆËã²æ»ý·ÖÁ¿
+		// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 		double cx = n[1] * h[2] - n[2] * h[1];
 		double cy = n[2] * h[0] - n[0] * h[2];
 		double cz = n[0] * h[1] - n[1] * h[0];
-		// µã³Ë
+		// ï¿½ï¿½ï¿½
 		return cx * r[0] + cy * r[1] + cz * r[2];
 	}
 
@@ -318,27 +323,27 @@ namespace my_math {
 	}
 
 	inline int calculateNumPoints(const double sca_th_s, const double sca_ph_s, const double sca_th_f, const double sca_ph_f, const double step) {
-		// ¼ÆËãth·½ÏòµÄµãÊýºÍph·½ÏòµÄµãÊý
+		// ï¿½ï¿½ï¿½ï¿½thï¿½ï¿½ï¿½ï¿½Äµï¿½ï¿½ï¿½ï¿½ï¿½phï¿½ï¿½ï¿½ï¿½Äµï¿½ï¿½ï¿½
 		int num_th_points, num_ph_points;
 
 		if (fabs(sca_th_f - sca_th_s) > 1e-10) {
-			// th·½Ïò±ä»¯£¬¼ÆËãth·½ÏòµÄµãÊý
+			// thï¿½ï¿½ï¿½ï¿½ä»¯ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½thï¿½ï¿½ï¿½ï¿½Äµï¿½ï¿½ï¿½
 			num_th_points = static_cast<int>(fabs(sca_th_f - sca_th_s) / step) + 1;
-			// ph·½Ïò²»±ä£¬Ö»ÓÐ1¸öµã
+			// phï¿½ï¿½ï¿½ò²»±ä£¬Ö»ï¿½ï¿½1ï¿½ï¿½ï¿½ï¿½
 			num_ph_points = 1;
 		}
 		else if (fabs(sca_ph_f - sca_ph_s) > 1e-10) {
-			// ph·½Ïò±ä»¯£¬¼ÆËãph·½ÏòµÄµãÊý
+			// phï¿½ï¿½ï¿½ï¿½ä»¯ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½phï¿½ï¿½ï¿½ï¿½Äµï¿½ï¿½ï¿½
 			num_ph_points = static_cast<int>(fabs(sca_ph_f - sca_ph_s) / step) + 1;
-			// th·½Ïò²»±ä£¬Ö»ÓÐ1¸öµã
+			// thï¿½ï¿½ï¿½ò²»±ä£¬Ö»ï¿½ï¿½1ï¿½ï¿½ï¿½ï¿½
 			num_th_points = 1;
 		}
 		else {
-			// Á½¸ö·½Ïò¶¼²»±ä£¬Ö»ÓÐ1¸öµã
+			// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ò¶¼²ï¿½ï¿½ä£¬Ö»ï¿½ï¿½1ï¿½ï¿½ï¿½ï¿½
 			num_th_points = 1;
 			num_ph_points = 1;
 		}
-		// ×ÜµãÊý = th·½ÏòµãÊý ¡Á ph·½ÏòµãÊý
+		// ï¿½Üµï¿½ï¿½ï¿½ = thï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ phï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 		return num_th_points * num_ph_points;
 	}
 
@@ -359,7 +364,7 @@ namespace my_math {
 	}
 }// namespace my_math
 
-namespace my_hsb {
+namespace my_fsb {
 	inline double normalizePhiDeg(double phiDeg) {
 		double v = std::fmod(phiDeg, 360.0);
 		if (v < 0.0) v += 360.0;
@@ -453,8 +458,129 @@ namespace my_hsb {
 		return radius;
 	}
 
-	inline std::complex<double> interpolateHSBComponent(
-		const std::vector<std::vector<HSBMonoSample>>& rings,
+	inline double deltaPhiDeg(double a, double b) {
+		const double da = normalizePhiDeg(a);
+		const double db = normalizePhiDeg(b);
+		const double d = std::abs(da - db);
+		return std::min(d, 360.0 - d);
+	}
+
+	inline double movingThetaRingDeg(int ringIndex, int thetaCount) {
+		return 180.0 * static_cast<double>(ringIndex + 1) /
+			static_cast<double>(thetaCount + 1);
+	}
+
+	inline double movingPhiSampleDeg(int phiIndex, int phiOrder) {
+		const int phiCount = 2 * phiOrder + 1;
+		return normalizePhiDeg(
+			360.0 * static_cast<double>(phiIndex) /
+			static_cast<double>(phiCount));
+	}
+
+	inline std::vector<int> selectMovingThetaRingIndices(
+		double thetaQueryDeg,
+		int thetaCount,
+		double marginDeg)
+	{
+		std::vector<int> indices;
+		if (thetaCount <= 0) {
+			return indices;
+		}
+
+		const double spacingDeg = 180.0 / static_cast<double>(thetaCount + 1);
+		const double radiusDeg = std::max(0.0, marginDeg) + 0.5 * spacingDeg;
+		int nearest = 0;
+		double nearestDiff = std::numeric_limits<double>::max();
+		for (int i = 0; i < thetaCount; ++i) {
+			const double thetaDeg = movingThetaRingDeg(i, thetaCount);
+			const double diff = std::abs(thetaDeg - thetaQueryDeg);
+			if (diff <= radiusDeg) {
+				indices.push_back(i);
+			}
+			if (diff < nearestDiff) {
+				nearestDiff = diff;
+				nearest = i;
+			}
+		}
+		if (indices.empty()) {
+			indices.push_back(nearest);
+		}
+		return indices;
+	}
+
+	inline std::vector<int> selectMovingPhiIndices(
+		double phiQueryDeg,
+		int phiOrder,
+		double marginDeg)
+	{
+		std::vector<int> indices;
+		const int safeOrder = std::max(1, phiOrder);
+		const int phiCount = 2 * safeOrder + 1;
+		const double spacingDeg = 360.0 / static_cast<double>(phiCount);
+		const double radiusDeg = std::max(0.0, marginDeg) + 0.5 * spacingDeg;
+		int nearest = -safeOrder;
+		double nearestDiff = std::numeric_limits<double>::max();
+
+		for (int n = -safeOrder; n <= safeOrder; ++n) {
+			const double phiDeg = movingPhiSampleDeg(n, safeOrder);
+			const double diff = deltaPhiDeg(phiDeg, phiQueryDeg);
+			if (diff <= radiusDeg) {
+				indices.push_back(n);
+			}
+			if (diff < nearestDiff) {
+				nearestDiff = diff;
+				nearest = n;
+			}
+		}
+		if (indices.empty()) {
+			indices.push_back(nearest);
+		}
+		return indices;
+	}
+
+	inline std::vector<std::vector<FSBMonoSample>> buildMovingFSBSampleLayout(
+		const std::vector<MovingAngleSample>& queryAngles,
+		double W,
+		double marginDeg)
+	{
+		const int thetaCount = std::max(2, static_cast<int>(std::ceil(2.0 * std::max(1.0, W))));
+		std::vector<std::set<int>> selectedPhi(thetaCount);
+
+		for (const auto& query : queryAngles) {
+			const std::vector<int> thetaIndices = selectMovingThetaRingIndices(
+				query.thetaBodyDeg, thetaCount, marginDeg);
+			for (int thetaIndex : thetaIndices) {
+				const double theta = movingThetaRingDeg(thetaIndex, thetaCount) * Pi / 180.0;
+				const int phiOrder = std::max(
+					1, static_cast<int>(std::ceil(std::max(1.0, W) * std::sin(theta))));
+				const std::vector<int> phiIndices = selectMovingPhiIndices(
+					query.phiBodyDeg, phiOrder, marginDeg);
+				selectedPhi[thetaIndex].insert(phiIndices.begin(), phiIndices.end());
+			}
+		}
+
+		std::vector<std::vector<FSBMonoSample>> rings;
+		rings.reserve(thetaCount);
+		for (int thetaIndex = 0; thetaIndex < thetaCount; ++thetaIndex) {
+			const double thetaDeg = movingThetaRingDeg(thetaIndex, thetaCount);
+			const double theta = thetaDeg * Pi / 180.0;
+			const int phiOrder = std::max(
+				1, static_cast<int>(std::ceil(std::max(1.0, W) * std::sin(theta))));
+			std::vector<FSBMonoSample> ring;
+			ring.reserve(selectedPhi[thetaIndex].size());
+			for (int phiIndex : selectedPhi[thetaIndex]) {
+				FSBMonoSample sample;
+				sample.thetaDeg = thetaDeg;
+				sample.phiDeg = movingPhiSampleDeg(phiIndex, phiOrder);
+				sample.phiOrder = phiOrder;
+				ring.push_back(std::move(sample));
+			}
+			rings.push_back(std::move(ring));
+		}
+		return rings;
+	}
+	inline std::complex<double> interpolateFSBComponent(
+		const std::vector<std::vector<FSBMonoSample>>& rings,
 		double thetaDeg,
 		double phiDeg,
 		int component)
@@ -494,14 +620,14 @@ namespace my_hsb {
 		return result;
 	}
 
-	inline std::vector<std::complex<double>> interpolateHSBField(
-		const std::vector<std::vector<HSBMonoSample>>& rings,
+	inline std::vector<std::complex<double>> interpolateFSBField(
+		const std::vector<std::vector<FSBMonoSample>>& rings,
 		double thetaDeg,
 		double phiDeg)
 	{
 		std::vector<std::complex<double>> field(3, std::complex<double>(0.0, 0.0));
 		for (int c = 0; c < 3; ++c) {
-			field[c] = interpolateHSBComponent(rings, thetaDeg, phiDeg, c);
+			field[c] = interpolateFSBComponent(rings, thetaDeg, phiDeg, c);
 		}
 		return field;
 	}

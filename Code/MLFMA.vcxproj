@@ -157,6 +157,7 @@
     <ClCompile Include="FMM.cpp" />
     <ClCompile Include="MFIE.cpp" />
     <ClCompile Include="MLFMM.cpp" />
+    <ClCompile Include="MovingTarget.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MoM.cpp" />
     <ClCompile Include="NASReader.cpp" />
@@ -166,6 +167,7 @@
     <ClCompile Include="RWGGenerator.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="ACARHS.h" />
     <ClInclude Include="AlgoFMM.h" />
     <ClInclude Include="AlgoMLFMM.h" />
     <ClInclude Include="BatchRunner.h" />
@@ -177,6 +179,7 @@
     <ClInclude Include="GMRES.h" />
     <ClInclude Include="MFIE.h" />
     <ClInclude Include="MLFMM.h" />
+    <ClInclude Include="MovingTarget.h" />
     <ClInclude Include="MoM.h" />
     <ClInclude Include="MyStruct.h" />
     <ClInclude Include="NASReader.h" />
@@ -189,6 +192,7 @@
     <ClInclude Include="ProcessFMM.h" />
     <ClInclude Include="ProcessMLFMM.h" />
     <ClInclude Include="RCS.h" />
+    <ClInclude Include="RunLogger.h" />
     <ClInclude Include="RWGGenerator.h" />
     <ClInclude Include="Vm.h" />
     <ClInclude Include="Zmartix.h" />
