@@ -1,12 +1,12 @@
-﻿# MLFMA 批量仿真配置文件
+# MLFMA 批量仿真配置文件
 # 行首 # 为注释
 # .\MLFMA.exe batch D:\MyCode\PMCHWT_MLFMA\MLFMA\Code\batch_config.txt
 
 # ============ 网格文件（分号分隔多个路径） ============
-nas_files = D:\MyCode\PMCHWT_MLFMA\DATA\SLICY_like_1e9\SLICY_like_1e9.nas
+nas_files = D:\MyCode\PMCHWT_MLFMA\DATA\4Qiuzhui\4Qiuzhui_2e9.nas
 
 # ============ 频率列表 (Hz)，逗号分隔 ============
-frequencies = 1.0e9
+frequencies = 2.0e9
 
 # ============ 入射角度 ============
 # 方式1：直接列出 theta:phi 对（逗号分隔）
@@ -19,6 +19,7 @@ incident_angles = 90:0
 # incident_phi_range = 0:350:10
 
 # ============ 散射角度范围 ============
+# Moving 模式下散射角扫描范围不作为运动路径角度来源，但仍需给合法值
 sca_theta = 0:180
 sca_phi = 0:360
 step = 1
@@ -35,16 +36,45 @@ matrix_solver = 0
 
 mono_dual = mono
 
-# HSB mono acceleration: 0 = off, 1 = on
-# Only takes effect for mono runs; hsb_rho is the oversampling factor W = rho*k*a.
-use_hsb_mono = 0
-hsb_rho = 1.2
+# ============ FSB ============
+# FSB mono acceleration: 0 = off, 1 = on
+# Only takes effect for mono runs; fsb_rho is the oversampling factor W = rho*k*a.
+use_fsb_mono = 0
+fsb_rho = 1.2
 
-# export_hsb_complex_field: 0 = off, 1 = output Ev/Eh complex field on the configured scan grid
-export_hsb_complex_field = 0
+# export_fsb_complex_field: 0 = off, 1 = output Ev/Eh complex field on the configured scan grid
+export_fsb_complex_field = 0
 
-# export_hsb_samples: 0 = off, 1 = output accurate HSB sample information
-export_hsb_samples = 0
+# export_fsb_samples: 0 = off, 1 = output accurate FSB sample information
+export_fsb_samples = 0
+
+# ============ FSB-Moving ============
+# FSB-MLFMA moving path mode: 0 = off, 1 = on
+# Requires algorithm = 2, mono_dual = mono, integral_equation = 0 or 1, and moving_path_file.
+use_fsb_mlfma_moving = 1
+moving_path_file = D:\MyCode\PMCHWT_MLFMA\MLFMA\moving_path.txt
+radar_position = 0.5,0.5,0.7071067812
+moving_angle_margin_deg = 2.0
+moving_angle_merge_tol_deg = 0.25
+export_moving_angles = 1
+export_moving_complex_field = 0
+export_moving_samples = 1
+
+# ============ Accurate-MLFMA-Moving ============
+# Accurate moving mode: solve every moving state directly with MLFMA.
+# Requires algorithm = 2, mono_dual = mono, integral_equation = 0 or 1, and moving_path_file.
+use_accurate_mlfma_moving = 0
+
+# ============ ACA-RHS-Moving ============
+# ACA RHS moving acceleration: 0 = off, 1 = on
+# Requires algorithm = 2, mono_dual = mono, integral_equation = 0 or 1, and moving_path_file.
+use_aca_rhs_moving = 0
+aca_rhs_tol = 1.0e-3
+aca_rhs_max_rank = 0
+aca_rhs_pivot_eps = 1.0e-14
+export_aca_rhs_check = 1
+aca_rhs_check_count = 10
+export_aca_rhs_factors = 0
 
 gauss_points = 7
 omp_threads = 16

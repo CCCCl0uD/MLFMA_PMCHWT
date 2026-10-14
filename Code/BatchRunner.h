@@ -19,6 +19,8 @@
 #include "FMM.h"
 #include "MLFMM.h"
 #include "RWGGenerator.h"
+#include "RunLogger.h"
+#include "PathUtils.h"
 
 struct MaterialParam {
 	double epsilonR_real = 1.0;
@@ -43,10 +45,26 @@ struct SimTask {
 	double epsilonR_real, epsilonR_imag;
 	double muR_real, muR_imag;
 	int ompThreads;
-	bool useHSBMono;
-	double hsbRho;
-	bool exportHSBComplexField;
-	bool exportHSBSamples;
+	bool useFSBMono;
+	double fsbRho;
+	bool exportFSBComplexField;
+	bool exportFSBSamples;
+	bool useFSBMLFMAMoving;
+	std::string movingPathFile;
+	double radarX, radarY, radarZ;
+	double movingAngleMarginDeg;
+	double movingAngleMergeTolDeg;
+	bool exportMovingAngles;
+	bool exportMovingComplexField;
+	bool exportMovingSamples;
+	bool useAccurateMLFMAMoving;
+	bool useACARHSMoving;
+	double acaRHSTol;
+	int acaRHSMaxRank;
+	double acaRHSPivotEps;
+	bool exportACARHSCheck;
+	int acaRHSCheckCount;
+	bool exportACARHSFactors;
 };
 
 struct BatchConfig {
@@ -65,10 +83,26 @@ struct BatchConfig {
 	int N_points = 7;
 	std::vector<MaterialParam> materialParams{ MaterialParam{} };
 	int ompThreads = 12;
-	bool useHSBMono = false;
-	double hsbRho = 1.2;
-	bool exportHSBComplexField = false;
-	bool exportHSBSamples = false;
+	bool useFSBMono = false;
+	double fsbRho = 1.2;
+	bool exportFSBComplexField = false;
+	bool exportFSBSamples = false;
+	bool useFSBMLFMAMoving = false;
+	std::string movingPathFile;
+	double radarX = 0.0, radarY = 0.0, radarZ = 0.0;
+	double movingAngleMarginDeg = 2.0;
+	double movingAngleMergeTolDeg = 0.25;
+	bool exportMovingAngles = true;
+	bool exportMovingComplexField = false;
+	bool exportMovingSamples = false;
+	bool useAccurateMLFMAMoving = false;
+	bool useACARHSMoving = false;
+	double acaRHSTol = 1.0e-3;
+	int acaRHSMaxRank = 0;
+	double acaRHSPivotEps = 1.0e-14;
+	bool exportACARHSCheck = true;
+	int acaRHSCheckCount = 10;
+	bool exportACARHSFactors = false;
 
 	std::vector<SimTask> generateTasks() const {
 		std::vector<SimTask> tasks;
@@ -100,10 +134,28 @@ struct BatchConfig {
 							task.muR_real = material.muR_real;
 							task.muR_imag = material.muR_imag;
 							task.ompThreads = ompThreads;
-							task.useHSBMono = useHSBMono;
-							task.hsbRho = hsbRho;
-							task.exportHSBComplexField = exportHSBComplexField;
-							task.exportHSBSamples = exportHSBSamples;
+							task.useFSBMono = useFSBMono;
+							task.fsbRho = fsbRho;
+							task.exportFSBComplexField = exportFSBComplexField;
+							task.exportFSBSamples = exportFSBSamples;
+							task.useFSBMLFMAMoving = useFSBMLFMAMoving;
+							task.movingPathFile = movingPathFile;
+							task.radarX = radarX;
+							task.radarY = radarY;
+							task.radarZ = radarZ;
+							task.movingAngleMarginDeg = movingAngleMarginDeg;
+							task.movingAngleMergeTolDeg = movingAngleMergeTolDeg;
+							task.exportMovingAngles = exportMovingAngles;
+							task.exportMovingComplexField = exportMovingComplexField;
+							task.exportMovingSamples = exportMovingSamples;
+							task.useAccurateMLFMAMoving = useAccurateMLFMAMoving;
+							task.useACARHSMoving = useACARHSMoving;
+							task.acaRHSTol = acaRHSTol;
+							task.acaRHSMaxRank = acaRHSMaxRank;
+							task.acaRHSPivotEps = acaRHSPivotEps;
+							task.exportACARHSCheck = exportACARHSCheck;
+							task.acaRHSCheckCount = acaRHSCheckCount;
+							task.exportACARHSFactors = exportACARHSFactors;
 							tasks.push_back(task);
 						}
 					}
@@ -311,17 +363,70 @@ public:
 			else if (key == "omp_threads") {
 				cfg.ompThreads = std::stoi(value);
 			}
-			else if (key == "use_hsb_mono") {
-				cfg.useHSBMono = parseBool(value);
+			else if (key == "use_fsb_mono") {
+				cfg.useFSBMono = parseBool(value);
 			}
-			else if (key == "hsb_rho") {
-				cfg.hsbRho = std::stod(value);
+			else if (key == "fsb_rho") {
+				cfg.fsbRho = std::stod(value);
 			}
-			else if (key == "export_hsb_complex_field") {
-				cfg.exportHSBComplexField = parseBool(value);
+			else if (key == "export_fsb_complex_field") {
+				cfg.exportFSBComplexField = parseBool(value);
 			}
-			else if (key == "export_hsb_samples") {
-				cfg.exportHSBSamples = parseBool(value);
+			else if (key == "export_fsb_samples") {
+				cfg.exportFSBSamples = parseBool(value);
+			}
+			else if (key == "use_fsb_mlfma_moving") {
+				cfg.useFSBMLFMAMoving = parseBool(value);
+			}
+			else if (key == "moving_path_file") {
+				cfg.movingPathFile = value;
+			}
+			else if (key == "radar_position") {
+				auto parts = splitString(value, ',');
+				if (parts.size() == 3) {
+					cfg.radarX = std::stod(parts[0]);
+					cfg.radarY = std::stod(parts[1]);
+					cfg.radarZ = std::stod(parts[2]);
+				}
+			}
+			else if (key == "moving_angle_margin_deg") {
+				cfg.movingAngleMarginDeg = std::stod(value);
+			}
+			else if (key == "moving_angle_merge_tol_deg") {
+				cfg.movingAngleMergeTolDeg = std::stod(value);
+			}
+			else if (key == "export_moving_angles") {
+				cfg.exportMovingAngles = parseBool(value);
+			}
+			else if (key == "export_moving_complex_field") {
+				cfg.exportMovingComplexField = parseBool(value);
+			}
+			else if (key == "export_moving_samples") {
+				cfg.exportMovingSamples = parseBool(value);
+			}
+			else if (key == "use_accurate_mlfma_moving") {
+				cfg.useAccurateMLFMAMoving = parseBool(value);
+			}
+			else if (key == "use_aca_rhs_moving") {
+				cfg.useACARHSMoving = parseBool(value);
+			}
+			else if (key == "aca_rhs_tol") {
+				cfg.acaRHSTol = std::stod(value);
+			}
+			else if (key == "aca_rhs_max_rank") {
+				cfg.acaRHSMaxRank = std::stoi(value);
+			}
+			else if (key == "aca_rhs_pivot_eps") {
+				cfg.acaRHSPivotEps = std::stod(value);
+			}
+			else if (key == "export_aca_rhs_check") {
+				cfg.exportACARHSCheck = parseBool(value);
+			}
+			else if (key == "aca_rhs_check_count") {
+				cfg.acaRHSCheckCount = std::stoi(value);
+			}
+			else if (key == "export_aca_rhs_factors") {
+				cfg.exportACARHSFactors = parseBool(value);
 			}
 		}
 
@@ -362,11 +467,16 @@ private:
 class BatchRunner {
 public:
 	static void run(const std::string& configPath) {
+		BatchConfig batchCfg = BatchConfigParser::parse(configPath);
+		ScopedRunLogger runLogger(makeBatchLogPath(configPath));
+
 		std::cout << "========================================\n";
 		std::cout << " Algorithm Batch Simulation Runner\n";
 		std::cout << "========================================\n\n";
+		if (runLogger.enabled()) {
+			std::cout << "Run log file: " << runLogger.path() << "\n\n";
+		}
 
-		BatchConfig batchCfg = BatchConfigParser::parse(configPath);
 		std::vector<SimTask> tasks = batchCfg.generateTasks();
 
 		std::cout << "Total tasks: " << tasks.size()
@@ -389,10 +499,16 @@ public:
 				<< ", IE: " << task.selectIntegralEqu
 				<< ", Solver: " << task.selectMatrixSolver
 				<< " (0=GMRES, 1=CGS)\n";
-			std::cout << "  HSB Mono: " << (task.useHSBMono ? "on" : "off")
-				<< ", rho=" << task.hsbRho
-				<< ", field=" << (task.exportHSBComplexField ? "on" : "off")
-				<< ", samples=" << (task.exportHSBSamples ? "on" : "off") << "\n";
+			std::cout << "  FSB Mono: " << (task.useFSBMono ? "on" : "off")
+				<< ", rho=" << task.fsbRho
+				<< ", field=" << (task.exportFSBComplexField ? "on" : "off")
+				<< ", samples=" << (task.exportFSBSamples ? "on" : "off")
+				<< ", moving=" << (task.useFSBMLFMAMoving ? "on" : "off") << "\n";
+			std::cout << "  Accurate MLFMA Moving: "
+				<< (task.useAccurateMLFMAMoving ? "on" : "off") << "\n";
+			std::cout << "  ACA-RHS Moving: " << (task.useACARHSMoving ? "on" : "off")
+				<< ", tol=" << task.acaRHSTol
+				<< ", maxRank=" << task.acaRHSMaxRank << "\n";
 			std::cout << "  Polarization: h -> v (sequential)\n";
 			std::cout << "----------------------------------------\n";
 
@@ -421,6 +537,11 @@ public:
 	}
 
 private:
+	static std::string makeBatchLogPath(const std::string& configPath) {
+		return getParentPath(configPath) + "\\" + getBaseName(configPath) +
+			"_RUN_LOG_" + getCurrentTimeString() + ".txt";
+	}
+
 	static int executeSingleTask(const SimTask& task) {
 		try {
 			omp_set_dynamic(0);
@@ -493,10 +614,28 @@ private:
 				cfg.scaPhiStart = task.sca_ph_s;
 				cfg.scaPhiEnd = task.sca_ph_f;
 				cfg.scaStep = task.step;
-				cfg.useHSBMono = task.useHSBMono;
-				cfg.hsbRho = task.hsbRho;
-				cfg.exportHSBComplexField = task.exportHSBComplexField;
-				cfg.exportHSBSamples = task.exportHSBSamples;
+				cfg.useFSBMono = task.useFSBMono;
+				cfg.fsbRho = task.fsbRho;
+				cfg.exportFSBComplexField = task.exportFSBComplexField;
+				cfg.exportFSBSamples = task.exportFSBSamples;
+				cfg.useFSBMLFMAMoving = task.useFSBMLFMAMoving;
+				cfg.movingPathFile = task.movingPathFile;
+				cfg.radarX = task.radarX;
+				cfg.radarY = task.radarY;
+				cfg.radarZ = task.radarZ;
+				cfg.movingAngleMarginDeg = task.movingAngleMarginDeg;
+				cfg.movingAngleMergeTolDeg = task.movingAngleMergeTolDeg;
+				cfg.exportMovingAngles = task.exportMovingAngles;
+				cfg.exportMovingComplexField = task.exportMovingComplexField;
+				cfg.exportMovingSamples = task.exportMovingSamples;
+				cfg.useAccurateMLFMAMoving = task.useAccurateMLFMAMoving;
+				cfg.useACARHSMoving = task.useACARHSMoving;
+				cfg.acaRHSTol = task.acaRHSTol;
+				cfg.acaRHSMaxRank = task.acaRHSMaxRank;
+				cfg.acaRHSPivotEps = task.acaRHSPivotEps;
+				cfg.exportACARHSCheck = task.exportACARHSCheck;
+				cfg.acaRHSCheckCount = task.acaRHSCheckCount;
+				cfg.exportACARHSFactors = task.exportACARHSFactors;
 
 				if (task.selectIntegralEqu == 2) {
 					cfg.epsilonR = epsilonR;

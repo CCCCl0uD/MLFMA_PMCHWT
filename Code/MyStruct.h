@@ -101,7 +101,7 @@ struct RWGBase {
 	Point edgeCenterCenter;
 };
 
-struct HSBMonoSample {
+struct FSBMonoSample {
 	double thetaDeg;
 	double phiDeg;
 	int phiOrder = 1;

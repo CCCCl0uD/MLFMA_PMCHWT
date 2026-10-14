@@ -257,25 +257,25 @@ void MLFMM::matrix_solver(int n, std::complex<double> x[], std::complex<double> 
 			ProcessMLFMM::clearSmBm(Sm_J2, Bm_J2);
 			ProcessMLFMM::clearSmBm(Sm_M2, Bm_M2);
 
-			// ---- Pass 1: k1, J �?L1(J)、K1(J) ----
+			// ---- Pass 1: k1, J �?L1(J)、K1(J) ----
 			ProcessMLFMM::mexp(Sm_J1, octreeNodes_[maxlvl], Vsmi, kp_lvl_k1[0], x, 0, maxlvl);
 			ProcessMLFMM::m2m(Sm_J1, octreeNodes_, kp_lvl_k1, interpol_k1, maxlvl, levelSpan, wave.k1());
 			ProcessMLFMM::m2l(Sm_J1, Bm_J1, octreeNodes_, TF, kp_lvl_k1, WGL_k1, WGL_phi_k1, phi_level_k1, maxlvl, levelSpan);
 			ProcessMLFMM::l2l(Bm_J1, octreeNodes_, kp_lvl_k1, phi_level_k1, interpol_k1, maxlvl, levelSpan, wave.k1());
 
-			// ---- Pass 2: k1, M �?K1(M)、L1(M) ----
+			// ---- Pass 2: k1, M �?K1(M)、L1(M) ----
 			ProcessMLFMM::mexp(Sm_M1, octreeNodes_[maxlvl], Vsmi, kp_lvl_k1[0], x, N, maxlvl);
 			ProcessMLFMM::m2m(Sm_M1, octreeNodes_, kp_lvl_k1, interpol_k1, maxlvl, levelSpan, wave.k1());
 			ProcessMLFMM::m2l(Sm_M1, Bm_M1, octreeNodes_, TF, kp_lvl_k1, WGL_k1, WGL_phi_k1, phi_level_k1, maxlvl, levelSpan);
 			ProcessMLFMM::l2l(Bm_M1, octreeNodes_, kp_lvl_k1, phi_level_k1, interpol_k1, maxlvl, levelSpan, wave.k1());
 
-			// ---- Pass 3: k2, J �?L2(J)、K2(J) ----
+			// ---- Pass 3: k2, J �?L2(J)、K2(J) ----
 			ProcessMLFMM::mexp(Sm_J2, octreeNodes_[maxlvl], Vsmi2, kp_lvl_k2[0], x, 0, maxlvl);
 			ProcessMLFMM::m2m(Sm_J2, octreeNodes_, kp_lvl_k2, interpol_k2, maxlvl, levelSpan, wave.k2());
 			ProcessMLFMM::m2l(Sm_J2, Bm_J2, octreeNodes_, TF2, kp_lvl_k2, WGL_k2, WGL_phi_k2, phi_level_k2, maxlvl, levelSpan);
 			ProcessMLFMM::l2l(Bm_J2, octreeNodes_, kp_lvl_k2, phi_level_k2, interpol_k2, maxlvl, levelSpan, wave.k2());
 
-			// ---- Pass 4: k2, M �?K2(M)、L2(M) ----
+			// ---- Pass 4: k2, M �?K2(M)、L2(M) ----
 			ProcessMLFMM::mexp(Sm_M2, octreeNodes_[maxlvl], Vsmi2, kp_lvl_k2[0], x, N, maxlvl);
 			ProcessMLFMM::m2m(Sm_M2, octreeNodes_, kp_lvl_k2, interpol_k2, maxlvl, levelSpan, wave.k2());
 			ProcessMLFMM::m2l(Sm_M2, Bm_M2, octreeNodes_, TF2, kp_lvl_k2, WGL_k2, WGL_phi_k2, phi_level_k2, maxlvl, levelSpan);
@@ -413,7 +413,24 @@ void MLFMM::mlfmm_Mono_Pec_Efie(const RCSExportConfig& cfg, const std::string po
 		RHS::computeV_E(solver.rwgs, solver.gausspoint,
 			solver.wave.k1(), kInc, eInc, solver.Vm);
 		};
-	RCSUtils::computeMonoStatic(*this, cfg, computeV);
+	auto computeVEntry = [](MLFMM& solver, double kInc[3], double eInc[3], double hInc[3], int rwgid) {
+		(void)hInc;
+		return RHS::computeV_E_entry(
+			solver.rwgs, solver.gausspoint, solver.wave.k1(),
+			kInc, eInc, rwgid);
+		};
+	if (cfg.useAccurateMLFMAMoving) {
+		RCSUtils::computeMonoStatic_Accurate_Moving(*this, cfg, computeV);
+	}
+	else if (cfg.useACARHSMoving) {
+		RCSUtils::computeMonoStatic_ACARHS_Moving(*this, cfg, computeV, computeVEntry);
+	}
+	else if (cfg.useFSBMLFMAMoving) {
+		RCSUtils::computeMonoStatic_FSB_Moving(*this, cfg, computeV, cfg.fsbRho);
+	}
+	else {
+		RCSUtils::computeMonoStatic(*this, cfg, computeV);
+	}
 }
 
 void MLFMM::mlfmm_Dual_Pec_Cfie(const RCSExportConfig& cfg, const std::string pol_wave)
@@ -431,8 +448,22 @@ void MLFMM::mlfmm_Mono_Pec_Cfie(const RCSExportConfig& cfg, const std::string po
 		RHS::computeV_C(solver.rwgs, solver.gausspoint,
 			solver.wave.k1(), kInc, eInc, hInc, alpha, solver.Vm);
 		};
-	if (cfg.useHSBMono) {
-		RCSUtils::computeMonoStatic_HSB(*this, cfg, computeV, cfg.hsbRho);
+	auto computeVEntry = [](MLFMM& solver, double kInc[3], double eInc[3], double hInc[3], int rwgid) {
+		return RHS::computeV_C_entry(
+			solver.rwgs, solver.gausspoint, solver.wave.k1(),
+			kInc, eInc, hInc, alpha, rwgid);
+		};
+	if (cfg.useAccurateMLFMAMoving) {
+		RCSUtils::computeMonoStatic_Accurate_Moving(*this, cfg, computeV);
+	}
+	else if (cfg.useACARHSMoving) {
+		RCSUtils::computeMonoStatic_ACARHS_Moving(*this, cfg, computeV, computeVEntry);
+	}
+	else if (cfg.useFSBMLFMAMoving) {
+		RCSUtils::computeMonoStatic_FSB_Moving(*this, cfg, computeV, cfg.fsbRho);
+	}
+	else if (cfg.useFSBMono) {
+		RCSUtils::computeMonoStatic_FSB(*this, cfg, computeV, cfg.fsbRho);
 	}
 	else {
 		RCSUtils::computeMonoStatic(*this, cfg, computeV);
@@ -453,8 +484,8 @@ void MLFMM::mlfmm_Mono_Die_Pmchwt(const RCSExportConfig& cfg, const std::string 
 		RHS::computeV_PMCHWT(solver.rwgs, solver.gausspoint,
 			solver.wave.k1(), kInc, eInc, hInc, solver.Vm);
 		};
-	if (cfg.useHSBMono) {
-		RCSUtils::computeMonoStatic_HSB(*this, cfg, computeV, cfg.hsbRho);
+	if (cfg.useFSBMono) {
+		RCSUtils::computeMonoStatic_FSB(*this, cfg, computeV, cfg.fsbRho);
 	}
 	else {
 		RCSUtils::computeMonoStatic_PMCHWT(*this, cfg, computeV);

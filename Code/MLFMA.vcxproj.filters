@@ -30,6 +30,9 @@
     <ClCompile Include="MLFMM.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="MovingTarget.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
     <ClCompile Include="EFIE.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -56,6 +59,9 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="ACARHS.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="RWGGenerator.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -87,6 +93,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="MLFMM.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="MovingTarget.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="MoM.h">
@@ -132,6 +141,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="CGS.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="RunLogger.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <sstream>
 #include <iomanip>
+#include <cmath>
 
 #include "PathUtils.h"
 
@@ -29,10 +30,28 @@ struct RCSExportConfig {
 	double scaThetaStart{ 0.0 }, scaPhiStart{ 0.0 };
 	double scaThetaEnd{ 0.0 }, scaPhiEnd{ 0.0 };
 	double scaStep{ 1.0 };
-	bool useHSBMono{ false };
-	double hsbRho{ 1.2 };
-	bool exportHSBComplexField{ false };
-	bool exportHSBSamples{ false };
+	bool useFSBMono{ false };
+	double fsbRho{ 1.2 };
+	bool exportFSBComplexField{ false };
+	bool exportFSBSamples{ false };
+	bool useFSBMLFMAMoving{ false };
+	std::string movingPathFile;
+	double radarX{ 0.0 };
+	double radarY{ 0.0 };
+	double radarZ{ 0.0 };
+	double movingAngleMarginDeg{ 2.0 };
+	double movingAngleMergeTolDeg{ 0.25 };
+	bool exportMovingAngles{ true };
+	bool exportMovingComplexField{ false };
+	bool exportMovingSamples{ false };
+	bool useAccurateMLFMAMoving{ false };
+	bool useACARHSMoving{ false };
+	double acaRHSTol{ 1.0e-3 };
+	int acaRHSMaxRank{ 0 };
+	double acaRHSPivotEps{ 1.0e-14 };
+	bool exportACARHSCheck{ true };
+	int acaRHSCheckCount{ 10 };
+	bool exportACARHSFactors{ false };
 	std::complex<double> epsilonR{ 1.0,0.0 };
 	std::complex<double> muR{ 1.0,0.0 };
 
@@ -41,14 +60,14 @@ struct RCSExportConfig {
 	std::string baseName;
 	std::string fixedTimeStamp;
 
-	// Ä¬ÈÏ¹¹Ôìº¯Êý
+	// Ä¬ï¿½Ï¹ï¿½ï¿½ìº¯ï¿½ï¿½
 	RCSExportConfig() = default;
 
 	explicit RCSExportConfig(const std::string& path) : nasPath(path) {
 		updatePathInfo();
 	}
 
-	// ÍêÕû¹¹Ôìº¯Êý
+	// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ìº¯ï¿½ï¿½
 	RCSExportConfig(
 		const std::string& path,
 		IntegralEquation ie, MonoDual md, Polarization pw, int np,
@@ -61,13 +80,13 @@ struct RCSExportConfig {
 		validate();
 	}
 
-	// µ± nasPath ¸Ä±äÊ±£¬ÖØÐÂ¼ÆËã parentPath ºÍ baseName
+	// ï¿½ï¿½ nasPath ï¿½Ä±ï¿½Ê±ï¿½ï¿½ï¿½ï¿½ï¿½Â¼ï¿½ï¿½ï¿½ parentPath ï¿½ï¿½ baseName
 	void setNasPath(const std::string& path) {
 		nasPath = path;
 		updatePathInfo();
 	}
 
-	// »ñÈ¡Ê±¼ä´Á
+	// ï¿½ï¿½È¡Ê±ï¿½ï¿½ï¿½
 	void setFixedTimeStamp(const std::string& timestamp) {
 		fixedTimeStamp = timestamp;
 	}
@@ -76,7 +95,7 @@ struct RCSExportConfig {
 		return fixedTimeStamp.empty() ? getCurrentTimeString() : fixedTimeStamp;
 	}
 
-	// ÑéÖ¤²ÎÊýÊÇ·ñÓÐÐ§
+	// ï¿½ï¿½Ö¤ï¿½ï¿½ï¿½ï¿½ï¿½Ç·ï¿½ï¿½ï¿½Ð§
 	bool isValid() const noexcept {
 		if (nPoints <= 0) return false;
 		if (scaStep <= 0.0) return false;
@@ -86,7 +105,44 @@ struct RCSExportConfig {
 		if (scaThetaEnd < 0.0 || scaThetaEnd > 180.0) return false;
 		if (scaPhiStart < 0.0 || scaPhiStart > 360.0) return false;
 		if (scaPhiEnd < 0.0 || scaPhiEnd > 360.0) return false;
-		if (hsbRho <= 0.0) return false;
+		if (fsbRho <= 0.0) return false;
+		const int movingModeCount =
+			(useAccurateMLFMAMoving ? 1 : 0) +
+			(useACARHSMoving ? 1 : 0) +
+			(useFSBMLFMAMoving ? 1 : 0);
+		if (movingModeCount > 1) return false;
+		const bool hasMovingRadar =
+			(radarX * radarX + radarY * radarY + radarZ * radarZ) > 0.0;
+		if (useAccurateMLFMAMoving) {
+			if (selectAlgo != selectAlgorithm::MLFMA) return false;
+			if (material != materialType::PEC) return false;
+			if (monoDual != MonoDual::Mono) return false;
+			if (integralEqu == IntegralEquation::PMCHWT) return false;
+			if (movingPathFile.empty()) return false;
+			if (!hasMovingRadar) return false;
+		}
+		if (useFSBMLFMAMoving) {
+			if (selectAlgo != selectAlgorithm::MLFMA) return false;
+			if (material != materialType::PEC) return false;
+			if (monoDual != MonoDual::Mono) return false;
+			if (integralEqu == IntegralEquation::PMCHWT) return false;
+			if (movingPathFile.empty()) return false;
+			if (!hasMovingRadar) return false;
+			if (movingAngleMarginDeg < 0.0) return false;
+			if (movingAngleMergeTolDeg <= 0.0) return false;
+		}
+		if (useACARHSMoving) {
+			if (selectAlgo != selectAlgorithm::MLFMA) return false;
+			if (material != materialType::PEC) return false;
+			if (monoDual != MonoDual::Mono) return false;
+			if (integralEqu == IntegralEquation::PMCHWT) return false;
+			if (movingPathFile.empty()) return false;
+			if (!hasMovingRadar) return false;
+			if (acaRHSTol <= 0.0) return false;
+			if (acaRHSMaxRank < 0) return false;
+			if (acaRHSPivotEps <= 0.0) return false;
+			if (acaRHSCheckCount < 0) return false;
+		}
 		return true;
 	}
 
@@ -96,7 +152,7 @@ struct RCSExportConfig {
 		}
 	}
 
-	// Ã¶¾Ù×ª×Ö·û´®£¨ÓÃÓÚÎÄ¼þÃû£©
+	// Ã¶ï¿½ï¿½×ªï¿½Ö·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½
 	std::string algoStr() const {
 		switch (selectAlgo) {
 		case selectAlgorithm::MoM:   return "MoM";
@@ -132,7 +188,7 @@ struct RCSExportConfig {
 		return (polWave == Polarization::V) ? "V" : "H";
 	}
 
-	// Éú³ÉÎÄ¼þÃûµÄºËÐÄ²¿·Ö£¨²»º¬Â·¾¶¡¢Ç°×º¡¢Ê±¼ä´Á£©
+	// ï¿½ï¿½ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½ï¿½Äºï¿½ï¿½Ä²ï¿½ï¿½Ö£ï¿½ï¿½ï¿½ï¿½ï¿½Â·ï¿½ï¿½ï¿½ï¿½Ç°×ºï¿½ï¿½Ê±ï¿½ï¿½ï¿½ï¿½ï¿½
 	std::string toCoreString() const {
 		std::ostringstream oss;
 		oss << algoStr() << "_"
@@ -141,6 +197,15 @@ struct RCSExportConfig {
 			<< monoDualStr() << "_"
 			<< polWaveStr() << "_"
 			<< nPoints << "pts";
+		if (useAccurateMLFMAMoving) {
+			oss << "_AccurateMLFMAMoving";
+		}
+		if (useFSBMLFMAMoving) {
+			oss << "_FSBMLFMAMoving";
+		}
+		if (useACARHSMoving) {
+			oss << "_ACARHSMoving";
+		}
 		if (material == materialType::Die) {
 			oss << "_eps" << epsilonR.real() << "_" << epsilonR.imag();
 		}
@@ -155,15 +220,15 @@ struct RCSExportConfig {
 			<< "_step" << std::fixed << std::setprecision(1) << scaStep;
 		return oss.str();
 	}
-	// ----- Í¨ÓÃÎÄ¼þÃûÉú³ÉºÍÎÄ¼þ´ò¿ª -----
-	// ¹¹½¨ÍêÕûÂ·¾¶£º»ù´¡Ãû + ºËÐÄ´® + ×Ô¶¨Òåºó×º + Ê±¼ä´Á + À©Õ¹Ãû
+	// ----- Í¨ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Éºï¿½ï¿½Ä¼ï¿½ï¿½ï¿½ -----
+	// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Â·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ + ï¿½ï¿½ï¿½Ä´ï¿½ + ï¿½Ô¶ï¿½ï¿½ï¿½ï¿½×º + Ê±ï¿½ï¿½ï¿½ + ï¿½ï¿½Õ¹ï¿½ï¿½
 	std::string buildFilePath(const std::string& suffix, const std::string& extension = "txt") const {
 		namespace fs = std::filesystem;
 		std::string time = getTimeStamp();
 		std::string filename = baseName + "_" + toCoreString() + suffix + "_" + time + "." + extension;
 		return (fs::path(parentPath) / filename).string();
 	}
-	// Ö±½Ó´ò¿ªÎÄ¼þ£¬·µ»Ø ofstream (mode Ä¬ÈÏ²ÎÊýÎªstd::ios::out => ÎÄ±¾Ä£Ê½|  std::ios::binary => ¶þ½øÖÆÄ£Ê½)
+	// Ö±ï¿½Ó´ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ofstream (mode Ä¬ï¿½Ï²ï¿½ï¿½ï¿½Îªstd::ios::out => ï¿½Ä±ï¿½Ä£Ê½|  std::ios::binary => ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä£Ê½)
 	std::ofstream openFile(
 		const std::string& suffix,
 		const std::string& extension = "txt",

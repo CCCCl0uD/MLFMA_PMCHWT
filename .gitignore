@@ -40,3 +40,8 @@ x86/
 
 # Local third-party archives
 README/外部库/
+
+# Local generated presentation artifacts
+.codex-ppt-build/
+output/
+tmp_space_bandwidth_text.txt
