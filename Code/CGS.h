@@ -11,6 +11,7 @@
 #include <sstream>
 #include <type_traits>
 #include <vector>
+#include "SolverVectorOps.h"
 
 namespace MCGS {
 	inline std::string formatResidual7(double value)
@@ -26,20 +27,12 @@ namespace MCGS {
 		// CGS.f90 中 rho 和 alpha 分母使用 sum(a*b)，不对 a 取共轭。
 		inline Complex dot_bilinear(
 			int n, const Complex* a, const Complex* b) {
-			Complex sum(0.0, 0.0);
-			for (int i = 0; i < n; ++i) {
-				sum += a[i] * b[i];
-			}
-			return sum;
+			return SolverVectorOps::dot<false>(n, a, b);
 		}
 
 		// 欧氏范数：对应 Fortran 的 sqrt(real(dot_product(a,a)))。
 		inline double norm2(int n, const Complex* a) {
-			double sum = 0.0;
-			for (int i = 0; i < n; ++i) {
-				sum += std::norm(a[i]);
-			}
-			return std::sqrt(sum);
+			return SolverVectorOps::norm2(n, a);
 		}
 
 		struct NoPreconditioner {};
@@ -52,7 +45,7 @@ namespace MCGS {
 			Complex* output) {
 			if constexpr (std::is_same_v<std::decay_t<Preconditioner>,
 				NoPreconditioner>) {
-				std::copy_n(input, n, output);
+				SolverVectorOps::copy(n, input, output);
 			}
 			else {
 				preconditioner.apply(input, output);
@@ -135,10 +128,8 @@ namespace MCGS {
 
 			// 初始残差 r = b - A*x；影子残差 R~ = r0，此后不再改变。
 			ax(n, x, V_.data());
-			for (int i = 0; i < n; ++i) {
-				r[i] = b[i] - V_[i];
-				R_tilde[i] = r[i];
-			}
+			const double initial_rnorm = SolverVectorOps::residual_norm(
+				n, b, V_.data(), r.data(), R_tilde.data());
 
 			// 与 GMRES.h 一致：零右端时使用 1，避免相对残差除零。
 			double bnorm = detail::norm2(n, b);
@@ -146,7 +137,7 @@ namespace MCGS {
 				bnorm = 1.0;
 			}
 
-			double RSS = detail::norm2(n, r.data()) / bnorm;
+			double RSS = initial_rnorm / bnorm;
 			if (RSS < tol) {
 				return true;
 			}
@@ -168,15 +159,17 @@ namespace MCGS {
 
 				// 首次迭代：u = r, p = u；其后使用 beta 更新。
 				if (iter == 1) {
-					u = r;
-					p = u;
+					SolverVectorOps::for_each(n, [&](int i) {
+						u[i] = r[i];
+						p[i] = u[i];
+					});
 				}
 				else {
 					const Complex beta = rho / rho_previous;
-					for (int i = 0; i < n; ++i) {
+					SolverVectorOps::for_each(n, [&](int i) {
 						u[i] = r[i] + beta * q[i];
 						p[i] = u[i] + beta * (q[i] + beta * p[i]);
-					}
+					});
 				}
 
 				// P_ = M^{-1}p；无预处理时 P_ = p。
@@ -198,27 +191,26 @@ namespace MCGS {
 				}
 
 				const Complex alpha = rho / alpha_denominator;
-				for (int i = 0; i < n; ++i) {
+				SolverVectorOps::for_each(n, [&](int i) {
 					q[i] = u[i] - alpha * V_[i];
 					u_plus_q[i] = u[i] + q[i];
-				}
+				});
 
 				// U_ = M^{-1}(u+q)；无预处理时 U_ = u+q。
 				detail::apply_preconditioner(
 					n, preconditioner, u_plus_q.data(), U_.data());
 
-				for (int i = 0; i < n; ++i) {
+				SolverVectorOps::for_each(n, [&](int i) {
 					x[i] += alpha * U_[i];
-				}
+				});
 
 				// 第二次矩阵-向量乘：Q_ = A*U_。
 				ax(n, U_.data(), Q_.data());
-				for (int i = 0; i < n; ++i) {
-					r[i] -= alpha * Q_[i];
-				}
+				const double rnorm = SolverVectorOps::update_residual_norm(
+					n, r.data(), alpha, Q_.data());
 
 				// RSS = ||r|| / ||b||。
-				RSS = detail::norm2(n, r.data()) / bnorm;
+				RSS = rnorm / bnorm;
 				if (verbose) {
 					std::cout << "Iter " << iter << " Res: " << formatResidual7(RSS) << "\n";
 				}

@@ -1,5 +1,4 @@
 #pragma once
-#pragma once
 #ifndef PATHUTILS_H
 #define PATHUTILS_H
 

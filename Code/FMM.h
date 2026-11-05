@@ -18,8 +18,7 @@ struct VecHash {
 
 class FMM {
 public:
-	FMM(const RCSExportConfig& cfg, const int selectIntegralEqu, const int selectMatrixSolver,
-		std::string selectMono_Dual, const std::string pol_wave,
+	FMM(const RCSExportConfig& cfg, int selectMatrixSolver,
 		const std::vector<std::vector<OCTree::Node*>>& octreeNodes,
 		const std::vector<RWGBase>& rwgs, const int maxLevel_,
 		const gaussPoints& gausspoint, const double E0, const EMSource& wave);
@@ -72,15 +71,14 @@ public:
 
 	size_t computeMem();
 	void matrix_solver(int n, std::complex<double> x[], std::complex<double> rhs[], int itr_max, int mr, double tol_abs, double tol_rel);
-	void fmm_fullZmn_Die_Pmchwt();
 private:
 
-	void fmm_Dual_Pec_Efie(const RCSExportConfig& cfg, const std::string pol_wave);
-	void fmm_Mono_Pec_Efie(const RCSExportConfig& cfg, const std::string pol_wave);
-	void fmm_Dual_Pec_Cfie(const RCSExportConfig& cfg, const std::string pol_wave);
-	void fmm_Mono_Pec_Cfie(const RCSExportConfig& cfg, const std::string pol_wave);
-	void fmm_Dual_Die_Pmchwt(const RCSExportConfig& cfg, const std::string pol_wave);
-	void fmm_Mono_Die_Pmchwt(const RCSExportConfig& cfg, const std::string pol_wave);
+	void fmm_Dual_Pec_Efie(const RCSExportConfig& cfg);
+	void fmm_Mono_Pec_Efie(const RCSExportConfig& cfg);
+	void fmm_Dual_Pec_Cfie(const RCSExportConfig& cfg);
+	void fmm_Mono_Pec_Cfie(const RCSExportConfig& cfg);
+	void fmm_Dual_Die_Pmchwt(const RCSExportConfig& cfg);
+	void fmm_Mono_Die_Pmchwt(const RCSExportConfig& cfg);
 };
 
 #endif // FMM_H

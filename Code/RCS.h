@@ -23,10 +23,6 @@ namespace RCSUtils {
 			return;
 		}
 		auto iFile = cfg.openFile("_I", "txt");
-		if (!iFile.is_open()) {
-			std::cerr << "Error: Failed to open file for current coefficients export.\n";
-			return;
-		}
 		iFile << "I_solve\n";
 		for (int i = 0; i < solver.row; ++i) {
 			iFile << i << "\t" << I_solve[i] << "\n";
@@ -38,10 +34,6 @@ namespace RCSUtils {
 	template<typename SolverType>
 	void exportV(SolverType& solver, const RCSExportConfig& cfg) {
 		auto vFile = cfg.openFile("_V", "txt");
-		if (!vFile.is_open()) {
-			std::cerr << "Error: Failed to open file for voltage vector export.\n";
-			return;
-		}
 		vFile << "RHS\n";
 		for (int i = 0; i < solver.row; ++i) {
 			vFile << i << "\t" << solver.Vm[i] << "\n";
@@ -284,7 +276,6 @@ namespace RCSUtils {
 
 		// ����˫վ RCS
 		auto rcsFile = cfg.openFile("_RCS", "txt");
-		if (!rcsFile.is_open()) throw std::runtime_error("Cannot open RCS file");
 		const int thetaNum = calculateAngleCount(cfg.scaThetaStart, cfg.scaThetaEnd, cfg.scaStep);
 		const int phiNum = calculateAngleCount(cfg.scaPhiStart, cfg.scaPhiEnd, cfg.scaStep);
 		const int totalPoints = thetaNum * phiNum;
@@ -324,7 +315,6 @@ namespace RCSUtils {
 	template<typename SolverType, typename ComputeVFunc>
 	inline void computeMonoStatic(SolverType& solver, const RCSExportConfig& cfg, ComputeVFunc computeV) {
 		auto rcsFile = cfg.openFile("_RCS", "txt");
-		if (!rcsFile.is_open()) throw std::runtime_error("Cannot open RCS file");
 		//auto iFile = cfg.openFile("_I", "txt");
 		//auto vFile = cfg.openFile("_V", "txt");
 		const int thetaNum = calculateAngleCount(cfg.scaThetaStart, cfg.scaThetaEnd, cfg.scaStep);
@@ -451,7 +441,6 @@ namespace RCSUtils {
 		std::complex<double>* I_M = I_solve + solver.row;
 
 		auto rcsFile = cfg.openFile("_RCS", "txt");
-		if (!rcsFile.is_open()) throw std::runtime_error("Cannot open RCS file");
 		const int thetaNum = calculateAngleCount(cfg.scaThetaStart, cfg.scaThetaEnd, cfg.scaStep);
 		const int phiNum = calculateAngleCount(cfg.scaPhiStart, cfg.scaPhiEnd, cfg.scaStep);
 		const int totalPoints = thetaNum * phiNum;
@@ -497,7 +486,6 @@ namespace RCSUtils {
 	template<typename SolverType, typename ComputeVFunc>
 	inline void computeMonoStatic_PMCHWT(SolverType& solver, const RCSExportConfig& cfg, ComputeVFunc computeV) {
 		auto rcsFile = cfg.openFile("_RCS", "txt");
-		if (!rcsFile.is_open()) throw std::runtime_error("Cannot open RCS file");
 		const int thetaNum = calculateAngleCount(cfg.scaThetaStart, cfg.scaThetaEnd, cfg.scaStep);
 		const int phiNum = calculateAngleCount(cfg.scaPhiStart, cfg.scaPhiEnd, cfg.scaStep);
 		const int totalPoints = thetaNum * phiNum;
@@ -589,9 +577,6 @@ namespace RCSUtils {
 	{
 		(void)solver;
 		auto sampleFile = cfg.openFile("_FIELD_FSB_SAMPLES", "txt");
-		if (!sampleFile.is_open()) {
-			throw std::runtime_error("Cannot open FSB samples field file");
-		}
 
 		const std::string pol_wave = cfg.polWaveStr();
 		const double data_pol = (pol_wave == "V") ? 0.0 : 90.0;
@@ -638,43 +623,20 @@ namespace RCSUtils {
 		}
 	}
 
-	template<typename SolverType>
-	inline void exportFSBScanGrid(SolverType& solver, const RCSExportConfig& cfg,
+	inline void exportFSBScanGrid(const RCSExportConfig& cfg,
 		const std::vector<std::vector<FSBMonoSample>>& rings)
 	{
-		auto angleCount = [](double start, double end, double step) {
-			const double diff = std::abs(end - start);
-			if (diff < 1.0e-9) {
-				return 1;
-			}
-			return static_cast<int>(std::ceil(diff / step - 1.0e-9)) + 1;
-			};
-		auto angleAt = [](double start, double end, double step, int idx, int count) {
-			if (idx == count - 1) {
-				return end;
-			}
-			const double direction = (end >= start) ? 1.0 : -1.0;
-			return start + direction * idx * step;
-			};
-
-		(void)solver;
 		auto rcsFile = cfg.openFile("_RCS_FSB", "txt");
-		if (!rcsFile.is_open()) {
-			throw std::runtime_error("Cannot open FSB RCS file");
-		}
 
 		std::ofstream fieldFile;
 		if (cfg.exportFSBComplexField) {
 			fieldFile = cfg.openFile("_FIELD_FSB", "txt");
-			if (!fieldFile.is_open()) {
-				throw std::runtime_error("Cannot open FSB complex field file");
-			}
 		}
 
 		const std::string pol_wave = cfg.polWaveStr();
 		const double data_pol = (pol_wave == "V") ? 0.0 : 90.0;
-		const int thetaNum = angleCount(cfg.scaThetaStart, cfg.scaThetaEnd, cfg.scaStep);
-		const int phiNum = angleCount(cfg.scaPhiStart, cfg.scaPhiEnd, cfg.scaStep);
+		const int thetaNum = calculateAngleCount(cfg.scaThetaStart, cfg.scaThetaEnd, cfg.scaStep);
+		const int phiNum = calculateAngleCount(cfg.scaPhiStart, cfg.scaPhiEnd, cfg.scaStep);
 
 		rcsFile << std::fixed << std::setprecision(12);
 		if (cfg.exportFSBComplexField) {
@@ -682,7 +644,7 @@ namespace RCSUtils {
 		}
 
 		for (int it = 0; it < thetaNum; ++it) {
-			double thetaDeg = angleAt(
+			double thetaDeg = calculateAngleAt(
 				cfg.scaThetaStart, cfg.scaThetaEnd, cfg.scaStep, it, thetaNum);
 
 			const bool thetaPole = isThetaPole(thetaDeg);
@@ -690,7 +652,7 @@ namespace RCSUtils {
 			RCSGridValue poleValue;
 
 			for (int ip = 0; ip < phiNum; ++ip) {
-				double phiDeg = angleAt(
+				double phiDeg = calculateAngleAt(
 					cfg.scaPhiStart, cfg.scaPhiEnd, cfg.scaStep, ip, phiNum);
 				RCSGridValue value;
 				if (thetaPole && hasPoleValue) {
@@ -721,59 +683,10 @@ namespace RCSUtils {
 			}
 		}
 	}
-	template<typename SolverType>
-	inline void exportMovingAngles(SolverType& solver, const RCSExportConfig& cfg,
-		const std::vector<MovingAngleSample>& movingAngles)
+	inline void exportMovingAngles(const RCSExportConfig& cfg,
+		const std::vector<MovingAngleSample>& movingAngles, const std::string& suffix)
 	{
-		(void)solver;
-		auto angleFile = cfg.openFile("_ANGLES_FSB_MLFMA_MOVING", "txt");
-		if (!angleFile.is_open()) {
-			throw std::runtime_error("Cannot open FSB-MLFMA-Moving angle file");
-		}
-		angleFile << std::fixed << std::setprecision(12);
-		angleFile << "idx\ttime_s\tpos_x\tpos_y\tpos_z\trange_m\t"
-			<< "theta_global_deg\tphi_global_deg\ttheta_body_deg\tphi_body_deg\n";
-		for (int i = 0; i < static_cast<int>(movingAngles.size()); ++i) {
-			const auto& sample = movingAngles[i];
-			angleFile << i << "\t" << sample.time_s << "\t"
-				<< sample.pos[0] << "\t" << sample.pos[1] << "\t" << sample.pos[2] << "\t"
-				<< sample.range << "\t"
-				<< sample.thetaGlobalDeg << "\t" << sample.phiGlobalDeg << "\t"
-				<< sample.thetaBodyDeg << "\t" << sample.phiBodyDeg << "\n";
-		}
-	}
-
-	template<typename SolverType>
-	inline void exportACARHSMovingAngles(SolverType& solver, const RCSExportConfig& cfg,
-		const std::vector<MovingAngleSample>& movingAngles)
-	{
-		(void)solver;
-		auto angleFile = cfg.openFile("_ANGLES_ACARHS_MLFMA_MOVING", "txt");
-		if (!angleFile.is_open()) {
-			throw std::runtime_error("Cannot open ACA-RHS-MLFMA-Moving angle file");
-		}
-		angleFile << std::fixed << std::setprecision(12);
-		angleFile << "idx\ttime_s\tpos_x\tpos_y\tpos_z\trange_m\t"
-			<< "theta_global_deg\tphi_global_deg\ttheta_body_deg\tphi_body_deg\n";
-		for (int i = 0; i < static_cast<int>(movingAngles.size()); ++i) {
-			const auto& sample = movingAngles[i];
-			angleFile << i << "\t" << sample.time_s << "\t"
-				<< sample.pos[0] << "\t" << sample.pos[1] << "\t" << sample.pos[2] << "\t"
-				<< sample.range << "\t"
-				<< sample.thetaGlobalDeg << "\t" << sample.phiGlobalDeg << "\t"
-				<< sample.thetaBodyDeg << "\t" << sample.phiBodyDeg << "\n";
-		}
-	}
-
-	template<typename SolverType>
-	inline void exportAccurateMovingAngles(SolverType& solver, const RCSExportConfig& cfg,
-		const std::vector<MovingAngleSample>& movingAngles)
-	{
-		(void)solver;
-		auto angleFile = cfg.openFile("_ANGLES_ACCURATE_MLFMA_MOVING", "txt");
-		if (!angleFile.is_open()) {
-			throw std::runtime_error("Cannot open Accurate-MLFMA-Moving angle file");
-		}
+		auto angleFile = cfg.openFile(suffix, "txt");
 		angleFile << std::fixed << std::setprecision(12);
 		angleFile << "idx\ttime_s\tpos_x\tpos_y\tpos_z\trange_m\t"
 			<< "theta_global_deg\tphi_global_deg\ttheta_body_deg\tphi_body_deg\n";
@@ -807,9 +720,6 @@ namespace RCSUtils {
 		}
 
 		auto checkFile = cfg.openFile("_ACA_RHS_CHECK", "txt");
-		if (!checkFile.is_open()) {
-			throw std::runtime_error("Cannot open ACA-RHS check file");
-		}
 
 		const int timeCount = static_cast<int>(movingAngles.size());
 		const int checkCount = std::min(cfg.acaRHSCheckCount, timeCount);
@@ -865,9 +775,6 @@ namespace RCSUtils {
 		}
 
 		auto uFile = cfg.openFile("_ACA_RHS_FACTORS_U", "txt");
-		if (!uFile.is_open()) {
-			throw std::runtime_error("Cannot open ACA-RHS U factor file");
-		}
 		uFile << std::fixed << std::setprecision(17);
 		uFile << "rank_idx\trow_idx\treal\timag\n";
 		for (int m = 0; m < factors.rank; ++m) {
@@ -879,9 +786,6 @@ namespace RCSUtils {
 		}
 
 		auto vFile = cfg.openFile("_ACA_RHS_FACTORS_V", "txt");
-		if (!vFile.is_open()) {
-			throw std::runtime_error("Cannot open ACA-RHS V factor file");
-		}
 		vFile << std::fixed << std::setprecision(17);
 		vFile << "rank_idx\ttime_idx\treal\timag\n";
 		for (int m = 0; m < factors.rank; ++m) {
@@ -908,11 +812,8 @@ namespace RCSUtils {
 		std::vector<MovingState> states = MovingTarget::readMovingPathFile(cfg.movingPathFile);
 		std::vector<MovingAngleSample> movingAngles =
 			MovingTarget::computeMovingAngleSamples(states, radarPos);
-		if (movingAngles.empty()) {
-			throw std::runtime_error("Accurate-MLFMA-Moving has no moving states.");
-		}
 		if (cfg.exportMovingAngles) {
-			RCSUtils::exportAccurateMovingAngles(solver, cfg, movingAngles);
+			RCSUtils::exportMovingAngles(cfg, movingAngles, "_ANGLES_ACCURATE_MLFMA_MOVING");
 		}
 
 		const int timeCount = static_cast<int>(movingAngles.size());
@@ -921,9 +822,6 @@ namespace RCSUtils {
 		std::cout << "Accurate-MLFMA-Moving RHS rows = " << rowCount << std::endl;
 
 		auto rcsFile = cfg.openFile("_RCS_ACCURATE_MLFMA_MOVING", "txt");
-		if (!rcsFile.is_open()) {
-			throw std::runtime_error("Cannot open Accurate-MLFMA-Moving RCS file");
-		}
 		rcsFile << std::fixed << std::setprecision(12);
 		rcsFile << "idx\ttime_s\trange_m\ttheta_global_deg\tphi_global_deg\t"
 			<< "theta_body_deg\tphi_body_deg\trcs_db\trcs_v_db\trcs_h_db\n";
@@ -931,9 +829,6 @@ namespace RCSUtils {
 		std::ofstream fieldFile;
 		if (cfg.exportMovingComplexField) {
 			fieldFile = cfg.openFile("_FIELD_ACCURATE_MLFMA_MOVING", "txt");
-			if (!fieldFile.is_open()) {
-				throw std::runtime_error("Cannot open Accurate-MLFMA-Moving field file");
-			}
 			fieldFile << std::fixed << std::setprecision(12);
 			fieldFile << "idx\ttime_s\trange_m\ttheta_body_deg\tphi_body_deg\t"
 				<< "Ev_re\tEv_im\tEh_re\tEh_im\n";
@@ -1015,11 +910,8 @@ namespace RCSUtils {
 		std::vector<MovingState> states = MovingTarget::readMovingPathFile(cfg.movingPathFile);
 		std::vector<MovingAngleSample> movingAngles =
 			MovingTarget::computeMovingAngleSamples(states, radarPos);
-		if (movingAngles.empty()) {
-			throw std::runtime_error("ACA-RHS-MLFMA-Moving has no moving states.");
-		}
 		if (cfg.exportMovingAngles) {
-			RCSUtils::exportACARHSMovingAngles(solver, cfg, movingAngles);
+			RCSUtils::exportMovingAngles(cfg, movingAngles, "_ANGLES_ACARHS_MLFMA_MOVING");
 		}
 
 		const int timeCount = static_cast<int>(movingAngles.size());
@@ -1100,9 +992,6 @@ namespace RCSUtils {
 		}
 
 		auto rcsFile = cfg.openFile("_RCS_ACARHS_MLFMA_MOVING", "txt");
-		if (!rcsFile.is_open()) {
-			throw std::runtime_error("Cannot open ACA-RHS-MLFMA-Moving RCS file");
-		}
 		rcsFile << std::fixed << std::setprecision(12);
 		rcsFile << "idx\ttime_s\trange_m\ttheta_global_deg\tphi_global_deg\t"
 			<< "theta_body_deg\tphi_body_deg\taca_rank\trcs_db\trcs_v_db\trcs_h_db\n";
@@ -1166,7 +1055,7 @@ namespace RCSUtils {
 		std::vector<MovingAngleSample> movingAngles =
 			MovingTarget::computeMovingAngleSamples(states, radarPos);
 		if (cfg.exportMovingAngles) {
-			RCSUtils::exportMovingAngles(solver, cfg, movingAngles);
+			RCSUtils::exportMovingAngles(cfg, movingAngles, "_ANGLES_FSB_MLFMA_MOVING");
 		}
 
 		std::vector<MovingAngleSample> uniqueAngles =
@@ -1235,15 +1124,9 @@ namespace RCSUtils {
 		}
 
 		auto rcsFile = cfg.openFile("_RCS_FSB_MLFMA_MOVING", "txt");
-		if (!rcsFile.is_open()) {
-			throw std::runtime_error("Cannot open FSB-MLFMA-Moving RCS file");
-		}
 		std::ofstream fieldFile;
 		if (cfg.exportMovingComplexField) {
 			fieldFile = cfg.openFile("_FIELD_FSB_MLFMA_MOVING", "txt");
-			if (!fieldFile.is_open()) {
-				throw std::runtime_error("Cannot open FSB-MLFMA-Moving field file");
-			}
 			fieldFile << std::fixed << std::setprecision(12);
 			fieldFile << "idx\ttime_s\trange_m\ttheta_body_deg\tphi_body_deg\t"
 				<< "Ev_re\tEv_im\tEh_re\tEh_im\n";
@@ -1378,7 +1261,7 @@ namespace RCSUtils {
 		if (cfg.exportFSBSamples) {
 			RCSUtils::exportFSBSamples(solver, cfg, rings);
 		}
-		RCSUtils::exportFSBScanGrid(solver, cfg, rings);
+		RCSUtils::exportFSBScanGrid(cfg, rings);
 
 		const size_t mem = solver.computeMem();
 		std::cout << "FSB sample points = " << sampleCount << std::endl;

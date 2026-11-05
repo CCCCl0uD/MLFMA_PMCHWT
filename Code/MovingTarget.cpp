@@ -158,7 +158,9 @@ namespace MovingTarget {
 			throw std::runtime_error("Moving target range is too small.");
 		}
 
-		const std::array<double, 3> rGlobal = normalizeVector(rangeVec);
+		const std::array<double, 3> rGlobal{
+			rangeVec[0] / range, rangeVec[1] / range, rangeVec[2] / range
+		};
 		double R[3][3];
 		quaternionToMatrix(state.quat, R);
 		const std::array<double, 3> rBody = rotateGlobalToBody(R, rGlobal);

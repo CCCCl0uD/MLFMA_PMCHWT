@@ -140,6 +140,9 @@
     <ClInclude Include="PathUtils.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="SolverVectorOps.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="CGS.h">
       <Filter>头文件</Filter>
     </ClInclude>

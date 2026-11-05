@@ -7,12 +7,14 @@
 #include "RCS.h"
 #include "GMRES.h"
 #include "CGS.h"
+#include <algorithm>
+#include <stdexcept>
 
-FMM::FMM(const RCSExportConfig& cfg, const int selectIntegralEqu, const int selectMatrixSolver, const std::string selectMono_Dual, const std::string pol_wave,
+FMM::FMM(const RCSExportConfig& cfg, int selectMatrixSolver,
 	const std::vector<std::vector<OCTree::Node*>>& octreeNodes,
 	const std::vector<RWGBase>& rwgs, const int maxLevel_,
 	const gaussPoints& gausspoint, const double E0, const EMSource& wave)
-	: octreeNodes_(octreeNodes), rwgs(rwgs), maxLevel_(maxLevel_), gausspoint(gausspoint), E0(E0), wave(wave), integralEquType_(selectIntegralEqu), matrixSolverType_(selectMatrixSolver)
+	: octreeNodes_(octreeNodes), rwgs(rwgs), maxLevel_(maxLevel_), gausspoint(gausspoint), E0(E0), wave(wave), integralEquType_(static_cast<int>(cfg.integralEqu)), matrixSolverType_(selectMatrixSolver)
 {
 	// Compute base data: k, top level theta, L, levelSpan
 	// Compute Vsmi/Vfmj matrices theta/phi angles and weights from maxLevel_ down to level 2
@@ -34,12 +36,12 @@ FMM::FMM(const RCSExportConfig& cfg, const int selectIntegralEqu, const int sele
 			Zmartix::computeZ_fmm_pec_efie(octreeNodes_[maxLevel_], rwgs, Z_near, Z_near_id, row, wave,
 				gausspoint, 1);
 
-			if (selectMono_Dual == "dual") {
-				fmm_Dual_Pec_Efie(cfg, pol_wave);
+			if (cfg.monoDual == MonoDual::Dual) {
+				fmm_Dual_Pec_Efie(cfg);
 			}
 
-			if (selectMono_Dual == "mono") {
-				fmm_Mono_Pec_Efie(cfg, pol_wave);
+			if (cfg.monoDual == MonoDual::Mono) {
+				fmm_Mono_Pec_Efie(cfg);
 			}
 		}
 
@@ -52,12 +54,12 @@ FMM::FMM(const RCSExportConfig& cfg, const int selectIntegralEqu, const int sele
 			Zmartix::computeZ_fmm_pec_cfie(octreeNodes_[maxLevel_], rwgs, Z_near, Z_near_id, row, wave,
 				gausspoint, alpha, 1);
 
-			if (selectMono_Dual == "dual") {
-				fmm_Dual_Pec_Cfie(cfg, pol_wave);
+			if (cfg.monoDual == MonoDual::Dual) {
+				fmm_Dual_Pec_Cfie(cfg);
 			}
 
-			if (selectMono_Dual == "mono") {
-				fmm_Mono_Pec_Cfie(cfg, pol_wave);
+			if (cfg.monoDual == MonoDual::Mono) {
+				fmm_Mono_Pec_Cfie(cfg);
 			}
 		}
 	}
@@ -86,11 +88,11 @@ FMM::FMM(const RCSExportConfig& cfg, const int selectIntegralEqu, const int sele
 		Zmartix::computeZ_fmm_die_pmchwt(octreeNodes_[maxLevel_], rwgs,
 			Z_near, Z_near_id, row, wave, gausspoint, 1);
 
-		if (selectMono_Dual == "dual") {
-			fmm_Dual_Die_Pmchwt(cfg, pol_wave);
+		if (cfg.monoDual == MonoDual::Dual) {
+			fmm_Dual_Die_Pmchwt(cfg);
 		}
-		if (selectMono_Dual == "mono") {
-			fmm_Mono_Die_Pmchwt(cfg, pol_wave);
+		if (cfg.monoDual == MonoDual::Mono) {
+			fmm_Mono_Die_Pmchwt(cfg);
 		}
 	}
 }
@@ -113,12 +115,11 @@ size_t FMM::computeMem() {
 
 void FMM::matrix_solver(int n, std::complex<double> x[], std::complex<double> rhs[], int itr_max, int mr, double tol_abs, double tol_rel) {
 	const int EquType_ = integralEquType_;
+	if (n != (EquType_ == 2 ? 2LL * row : row)) {
+		throw std::invalid_argument("FMM matrix_solver dimension does not match the equation");
+	}
 
 	auto ax = [this, EquType_](int n, const std::complex<double>* x, std::complex<double>* w) {
-		for (int i = 0; i < n; ++i) {
-			w[i] = std::complex<double>(0.0, 0.0);
-		}
-
 		int nodenum = static_cast<int>(octreeNodes_[maxLevel_].size());
 
 		if (EquType_ != 2) {
@@ -147,7 +148,6 @@ void FMM::matrix_solver(int n, std::complex<double> x[], std::complex<double> rh
 						}
 					}
 				}
-#pragma omp barrier
 				// Multipole Expansion to Local Expansion (ML) Bm
 #pragma omp for schedule(dynamic)
 				for (int nodeN = 0; nodeN < nodenum; ++nodeN) {
@@ -210,9 +210,7 @@ void FMM::matrix_solver(int n, std::complex<double> x[], std::complex<double> rh
 			//   w[N:2*N)   = magnetic-current testing block
 
 			const int N = row;
-			if (n != 2 * N) {
-				throw std::invalid_argument("FMM PMCHWT matrix_solver requires n == 2 * row.");
-			}
+			std::fill_n(w, n, std::complex<double>{});
 
 			const int K1 = static_cast<int>(kp_lvl_k1[0].size());
 			const int K2 = static_cast<int>(kp_lvl_k2[0].size());
@@ -432,7 +430,7 @@ void FMM::matrix_solver(int n, std::complex<double> x[], std::complex<double> rh
 	}
 }
 
-void FMM::fmm_Dual_Pec_Efie(const RCSExportConfig& cfg, const std::string pol_wave)
+void FMM::fmm_Dual_Pec_Efie(const RCSExportConfig& cfg)
 {
 	auto computeV = [](FMM& solver, double kInc[3], double eInc[3], double hInc[3]) {
 		(void)hInc;
@@ -442,7 +440,7 @@ void FMM::fmm_Dual_Pec_Efie(const RCSExportConfig& cfg, const std::string pol_wa
 	RCSUtils::computeDualStatic(*this, cfg, computeV);
 }
 
-void FMM::fmm_Mono_Pec_Efie(const RCSExportConfig& cfg, const std::string pol_wave)
+void FMM::fmm_Mono_Pec_Efie(const RCSExportConfig& cfg)
 {
 	auto computeV = [](FMM& solver, double kInc[3], double eInc[3], double hInc[3]) {
 		(void)hInc;
@@ -452,7 +450,7 @@ void FMM::fmm_Mono_Pec_Efie(const RCSExportConfig& cfg, const std::string pol_wa
 	RCSUtils::computeMonoStatic(*this, cfg, computeV);
 }
 
-void FMM::fmm_Dual_Pec_Cfie(const RCSExportConfig& cfg, const std::string pol_wave)
+void FMM::fmm_Dual_Pec_Cfie(const RCSExportConfig& cfg)
 {
 	auto computeV = [](FMM& solver, double kInc[3], double eInc[3], double hInc[3]) {
 		RHS::computeV_C(solver.rwgs, solver.gausspoint,
@@ -461,7 +459,7 @@ void FMM::fmm_Dual_Pec_Cfie(const RCSExportConfig& cfg, const std::string pol_wa
 	RCSUtils::computeDualStatic(*this, cfg, computeV);
 }
 
-void FMM::fmm_Mono_Pec_Cfie(const RCSExportConfig& cfg, const std::string pol_wave)
+void FMM::fmm_Mono_Pec_Cfie(const RCSExportConfig& cfg)
 {
 	auto computeV = [this](FMM& solver, double kInc[3], double eInc[3], double hInc[3]) {
 		RHS::computeV_C(solver.rwgs, solver.gausspoint,
@@ -470,7 +468,7 @@ void FMM::fmm_Mono_Pec_Cfie(const RCSExportConfig& cfg, const std::string pol_wa
 	RCSUtils::computeMonoStatic(*this, cfg, computeV);
 }
 
-void FMM::fmm_Dual_Die_Pmchwt(const RCSExportConfig& cfg, const std::string pol_wave)
+void FMM::fmm_Dual_Die_Pmchwt(const RCSExportConfig& cfg)
 {
 	auto computeV = [](FMM& solver, double kInc[3], double eInc[3], double hInc[3]) {
 		RHS::computeV_PMCHWT(solver.rwgs, solver.gausspoint,
@@ -479,224 +477,11 @@ void FMM::fmm_Dual_Die_Pmchwt(const RCSExportConfig& cfg, const std::string pol_
 	RCSUtils::computeDualStatic_PMCHWT(*this, cfg, computeV);
 }
 
-void FMM::fmm_Mono_Die_Pmchwt(const RCSExportConfig& cfg, const std::string pol_wave)
+void FMM::fmm_Mono_Die_Pmchwt(const RCSExportConfig& cfg)
 {
 	auto computeV = [](FMM& solver, double kInc[3], double eInc[3], double hInc[3]) {
 		RHS::computeV_PMCHWT(solver.rwgs, solver.gausspoint,
 			solver.wave.k1(), kInc, eInc, hInc, solver.Vm);
 		};
 	RCSUtils::computeMonoStatic_PMCHWT(*this, cfg, computeV);
-}
-
-void FMM::fmm_fullZmn_Die_Pmchwt() {
-	// ===== PMCHWT matrix-vector product =====
-			// Unknown ordering:
-			//   x[0:N)     = J coefficients
-			//   x[N:2*N)   = M coefficients
-			//
-			// Equation ordering:
-			//   w[0:N)     = electric-current testing block
-			//   w[N:2*N)   = magnetic-current testing block
-
-	const int N = row;
-
-	std::vector<std::complex<double>> x(2 * N);
-	for (int i = 0; i < 2 * N; ++i) {
-		x[i] = std::complex<double>(1.0, 0.0);
-	}
-
-	int nodenum = static_cast<int>(octreeNodes_[maxLevel_].size());
-
-	std::vector<std::vector<std::complex<double>>> Z_full;
-	Z_full.resize(2 * N);
-	for (int m = 0; m < 2 * N; ++m) {
-		Z_full[m].assign(2 * N, std::complex<double>(0.0, 0.0));
-	}
-
-	const int K1 = static_cast<int>(kp_lvl_k1[0].size());
-	const int K2 = static_cast<int>(kp_lvl_k2[0].size());
-
-	const int tN1 = static_cast<int>(theta_level_k1[0].size());
-	const int pN1 = static_cast<int>(phi_level_k1[0].size());
-	const int tN2 = static_cast<int>(theta_level_k2[0].size());
-	const int pN2 = static_cast<int>(phi_level_k2[0].size());
-
-	// const参数存疑
-	const std::complex<double> const1 = wave.k1() * wave.k1() / (16.0 * Pi * Pi);
-	const std::complex<double> const2 = wave.k2() * wave.k2() / (16.0 * Pi * Pi);
-
-	auto aggregate = [&](const std::vector<std::vector<Complex3D>>& Vsm,
-		int xOffset, int K, std::vector<std::vector<Complex3D>>& Sm) {
-#pragma omp parallel for schedule(dynamic)
-			for (int nodeIdx = 0; nodeIdx < nodenum; ++nodeIdx) {
-				OCTree::Node* node = octreeNodes_[maxLevel_][nodeIdx];
-				const int rwgNum = static_cast<int>(node->rwgIndices.size());
-
-				for (int r = 0; r < rwgNum; ++r) {
-					const int rwgid = node->rwgIndices[r]->rwgid;
-					const std::complex<double> coeff = x[xOffset + rwgid];
-
-					for (int kpi = 0; kpi < K; ++kpi) {
-						Sm[nodeIdx][kpi].x += Vsm[rwgid][kpi].x * coeff;
-						Sm[nodeIdx][kpi].y += Vsm[rwgid][kpi].y * coeff;
-						Sm[nodeIdx][kpi].z += Vsm[rwgid][kpi].z * coeff;
-					}
-				}
-			}
-		};
-
-	auto translate = [&](const std::vector<std::vector<std::complex<double>>>& TF_all,
-		int K, const std::vector<std::vector<Complex3D>>& Sm,
-		std::vector<std::vector<Complex3D>>& Bm) {
-#pragma omp parallel for schedule(dynamic)
-			for (int nodeIdx = 0; nodeIdx < nodenum; ++nodeIdx) {
-				const int farnum = static_cast<int>(node_far[nodeIdx].size());
-
-				for (int f = 0; f < farnum; ++f) {
-					const int farId = node_far_id[nodeIdx][f];
-					const auto& TF = TF_all[node_farVec_id[nodeIdx][f]];
-
-					for (int kpi = 0; kpi < K; ++kpi) {
-						Bm[nodeIdx][kpi].x += TF[kpi] * Sm[farId][kpi].x;
-						Bm[nodeIdx][kpi].y += TF[kpi] * Sm[farId][kpi].y;
-						Bm[nodeIdx][kpi].z += TF[kpi] * Sm[farId][kpi].z;
-					}
-				}
-			}
-		};
-
-	auto integrateL = [](const std::vector<Complex3D>& V,
-		const std::vector<Complex3D>& B, const std::vector<double>& WGL,
-		double WGL_phi, int tN, int pN) -> std::complex<double> {
-			std::complex<double> val(0.0, 0.0);
-			for (int ti = 0; ti < tN; ++ti) {
-				for (int pj = 0; pj < pN; ++pj) {
-					const int idx = ti * pN + pj;
-					const double d2k = WGL[ti] * WGL_phi;
-					val += d2k * dot(V[idx], B[idx]);
-				}
-			}
-			return val;
-		};
-
-	auto integrateK = [](const std::vector<Complex3D>& V,
-		const std::vector<Complex3D>& B, const std::vector<kp_Point>& kp,
-		const std::vector<double>& WGL, double WGL_phi, int tN, int pN) -> std::complex<double> {
-			std::complex<double> val(0.0, 0.0);
-			for (int ti = 0; ti < tN; ++ti) {
-				for (int pj = 0; pj < pN; ++pj) {
-					const int idx = ti * pN + pj;
-					const double d2k = WGL[ti] * WGL_phi;
-
-					const double khat[3] = { kp[idx].x, kp[idx].y, kp[idx].z };
-
-					Complex3D kCrossV;
-					cross(kCrossV, khat, V[idx]);
-					val += d2k * dot(kCrossV, B[idx]);
-				}
-			}
-			return val;
-		};
-
-	// ---------- k1 external space ----------
-	{
-		std::vector<std::vector<Complex3D>> Sm_J1(
-			nodenum, std::vector<Complex3D>(K1, Complex3D()));
-		std::vector<std::vector<Complex3D>> Bm_J1(
-			nodenum, std::vector<Complex3D>(K1, Complex3D()));
-		std::vector<std::vector<Complex3D>> Sm_M1(
-			nodenum, std::vector<Complex3D>(K1, Complex3D()));
-		std::vector<std::vector<Complex3D>> Bm_M1(
-			nodenum, std::vector<Complex3D>(K1, Complex3D()));
-
-		aggregate(Vsmi, 0, K1, Sm_J1);
-		aggregate(Vsmi, N, K1, Sm_M1);
-
-		translate(TF_fmm, K1, Sm_J1, Bm_J1);
-		translate(TF_fmm, K1, Sm_M1, Bm_M1);
-
-#pragma omp parallel for schedule(dynamic)
-		for (int nodeIdx = 0; nodeIdx < nodenum; ++nodeIdx) {
-			OCTree::Node* node = octreeNodes_[maxLevel_][nodeIdx];
-			const int rwgNum = static_cast<int>(node->rwgIndices.size());
-
-			for (int r = 0; r < rwgNum; ++r) {
-				const int rwgid = node->rwgIndices[r]->rwgid;
-				const auto& V1 = Vfmj[rwgid];
-
-				const auto L1J = integrateL(
-					V1, Bm_J1[nodeIdx], WGL_k1[0], WGL_phi_k1[0], tN1, pN1);
-				const auto K1J = integrateK(
-					V1, Bm_J1[nodeIdx], kp_lvl_k1[0], WGL_k1[0], WGL_phi_k1[0], tN1, pN1);
-				const auto K1M = integrateK(
-					V1, Bm_M1[nodeIdx], kp_lvl_k1[0], WGL_k1[0], WGL_phi_k1[0], tN1, pN1);
-				const auto L1M = integrateL(
-					V1, Bm_M1[nodeIdx], WGL_k1[0], WGL_phi_k1[0], tN1, pN1);
-
-				Z_full[rwgNum][rwgid] += const1 * L1J;
-				Z_full[rwgNum][N + rwgid] += -const1 * K1J;
-				Z_full[rwgNum][rwgid] += const1 * K1M;
-				Z_full[rwgNum][N + rwgid] += const1 * L1M;
-			}
-		}
-	}
-
-	// ---------- k2 internal space ----------
-	{
-		std::vector<std::vector<Complex3D>> Sm_J2(
-			nodenum, std::vector<Complex3D>(K2, Complex3D()));
-		std::vector<std::vector<Complex3D>> Bm_J2(
-			nodenum, std::vector<Complex3D>(K2, Complex3D()));
-		std::vector<std::vector<Complex3D>> Sm_M2(
-			nodenum, std::vector<Complex3D>(K2, Complex3D()));
-		std::vector<std::vector<Complex3D>> Bm_M2(
-			nodenum, std::vector<Complex3D>(K2, Complex3D()));
-
-		aggregate(Vsmi2, 0, K2, Sm_J2);
-		aggregate(Vsmi2, N, K2, Sm_M2);
-
-		translate(TF_fmm2, K2, Sm_J2, Bm_J2);
-		translate(TF_fmm2, K2, Sm_M2, Bm_M2);
-
-#pragma omp parallel for schedule(dynamic)
-		for (int nodeIdx = 0; nodeIdx < nodenum; ++nodeIdx) {
-			OCTree::Node* node = octreeNodes_[maxLevel_][nodeIdx];
-			const int rwgNum = static_cast<int>(node->rwgIndices.size());
-
-			for (int r = 0; r < rwgNum; ++r) {
-				const int rwgid = node->rwgIndices[r]->rwgid;
-				const auto& V2 = Vfmj2[rwgid];
-
-				const auto L2J = integrateL(
-					V2, Bm_J2[nodeIdx], WGL_k2[0], WGL_phi_k2[0], tN2, pN2);
-				const auto K2J = integrateK(
-					V2, Bm_J2[nodeIdx], kp_lvl_k2[0], WGL_k2[0], WGL_phi_k2[0], tN2, pN2);
-				const auto K2M = integrateK(
-					V2, Bm_M2[nodeIdx], kp_lvl_k2[0], WGL_k2[0], WGL_phi_k2[0], tN2, pN2);
-				const auto L2M = integrateL(
-					V2, Bm_M2[nodeIdx], WGL_k2[0], WGL_phi_k2[0], tN2, pN2);
-
-				Z_full[rwgNum][rwgid] += const2 * wave.eta2() * L2J;
-				Z_full[rwgNum][N + rwgid] += -const2 * wave.eta1() * K2J;
-				Z_full[rwgNum][rwgid] += const2 * wave.eta1() * K2M;
-				Z_full[rwgNum][N + rwgid] += const2 * wave.eta2() * wave.epsilonR() * L2M;
-			}
-		}
-	}
-
-#pragma omp parallel for schedule(dynamic)
-	for (int nodeIdx = 0; nodeIdx < nodenum; ++nodeIdx) {
-		OCTree::Node* nd = octreeNodes_[maxLevel_][nodeIdx];
-		for (int r = 0; r < static_cast<int>(nd->rwgIndices.size()); ++r) {
-			int rwgid = nd->rwgIndices[r]->rwgid;
-
-			for (int j = 0; j < static_cast<int>(Z_near[rwgid].size()); ++j) {
-				Z_full[rwgid][Z_near_id[rwgid][j]] += x[Z_near_id[rwgid][j]] * Z_near[rwgid][j];
-			}
-
-			for (int j = 0; j < static_cast<int>(Z_near[N + rwgid].size()); ++j) {
-				Z_full[N + rwgid][Z_near_id[N + rwgid][j]] += x[Z_near_id[N + rwgid][j]] * Z_near[N + rwgid][j];
-			}
-		}
-	}
 }

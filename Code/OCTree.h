@@ -5,10 +5,12 @@
 
 #include"MyStruct.h"
 
-#include <vector>
+#include <cmath>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 class OCTree {
 public:
@@ -96,8 +98,6 @@ private:
 	void buildDistantRelatives();
 	bool isNear(Node* a, Node* b);
 	void getDRVec();
-	void verifyNeighborsAndDR();
-	bool cubeNear(Node* a, Node* b);
 
 	nodePoint globalBBoxMin_;
 	nodePoint globalBBoxMax_;

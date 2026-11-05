@@ -4,6 +4,8 @@
 #include "AlgoMLFMM.h"
 #include "GMRES.h"
 #include "CGS.h"
+#include <algorithm>
+#include <stdexcept>
 #include "ProcessFMM.h"
 #include "ProcessMLFMM.h"
 #include "Zmartix.h"
@@ -13,12 +15,12 @@
 /**************************************************************************************************/
 /**************************************************************************************************/
 MLFMM::MLFMM(
-	const RCSExportConfig& cfg, const int selectIntegralEqu, const int selectMatrixSolver, const std::string selectMono_Dual, const std::string pol_wave,
+	const RCSExportConfig& cfg, int selectMatrixSolver,
 	const std::vector<std::vector<OCTree::Node*>>& octreeNodes,
 	const std::vector<std::vector<OCTree::nodePoint>>& octreeNodesDRvec_,
 	const std::vector<RWGBase>& rwgs, const int maxLevel_,
 	const gaussPoints& gausspoint, const double E0, const EMSource& wave)
-	: octreeNodes_(octreeNodes), octreeNodesDRvec_(octreeNodesDRvec_), rwgs(rwgs), maxLevel_(maxLevel_), gausspoint(gausspoint), E0(E0), wave(wave), integralEquType_(selectIntegralEqu), matrixSolverType_(selectMatrixSolver)
+	: octreeNodes_(octreeNodes), octreeNodesDRvec_(octreeNodesDRvec_), rwgs(rwgs), maxLevel_(maxLevel_), gausspoint(gausspoint), E0(E0), wave(wave), integralEquType_(static_cast<int>(cfg.integralEqu)), matrixSolverType_(selectMatrixSolver)
 {
 	// Compute base data: k, top level theta, L, levelSpan
 	// Compute Vsmi/Vfmj matrices theta/phi angles and weights from maxLevel_ down to level 2
@@ -43,11 +45,11 @@ MLFMM::MLFMM(
 
 			initPECWorkspace();
 
-			if (selectMono_Dual == "dual") {
-				mlfmm_Dual_Pec_Efie(cfg, pol_wave);
+			if (cfg.monoDual == MonoDual::Dual) {
+				mlfmm_Dual_Pec_Efie(cfg);
 			}
-			if (selectMono_Dual == "mono") {
-				mlfmm_Mono_Pec_Efie(cfg, pol_wave);
+			if (cfg.monoDual == MonoDual::Mono) {
+				mlfmm_Mono_Pec_Efie(cfg);
 			}
 		}
 
@@ -62,11 +64,11 @@ MLFMM::MLFMM(
 
 			initPECWorkspace();
 
-			if (selectMono_Dual == "dual") {
-				mlfmm_Dual_Pec_Cfie(cfg, pol_wave);
+			if (cfg.monoDual == MonoDual::Dual) {
+				mlfmm_Dual_Pec_Cfie(cfg);
 			}
-			if (selectMono_Dual == "mono") {
-				mlfmm_Mono_Pec_Cfie(cfg, pol_wave);
+			if (cfg.monoDual == MonoDual::Mono) {
+				mlfmm_Mono_Pec_Cfie(cfg);
 			}
 		}
 	}
@@ -103,11 +105,11 @@ MLFMM::MLFMM(
 
 		initDIEWorkspace();
 
-		if (selectMono_Dual == "dual") {
-			mlfmm_Dual_Die_Pmchwt(cfg, pol_wave);
+		if (cfg.monoDual == MonoDual::Dual) {
+			mlfmm_Dual_Die_Pmchwt(cfg);
 		}
-		if (selectMono_Dual == "mono") {
-			mlfmm_Mono_Die_Pmchwt(cfg, pol_wave);
+		if (cfg.monoDual == MonoDual::Mono) {
+			mlfmm_Mono_Die_Pmchwt(cfg);
 		}
 	}
 }
@@ -185,11 +187,11 @@ size_t MLFMM::computeMem() {
 
 void MLFMM::matrix_solver(int n, std::complex<double> x[], std::complex<double> rhs[], int itr_max, int mr, double tol_abs, double tol_rel) {
 	const int EquType_ = integralEquType_;
+	if (n != (EquType_ == 2 ? 2LL * row : row)) {
+		throw std::invalid_argument("MLFMM matrix_solver dimension does not match the equation");
+	}
 
 	auto ax = [this, EquType_](int n, const std::complex<double>* x, std::complex<double>* w) {
-		for (int i = 0; i < n; ++i) {
-			w[i] = std::complex<double>(0.0, 0.0);
-		}
 
 		// ============ PEC ============
 		if (EquType_ != 2) {
@@ -243,6 +245,7 @@ void MLFMM::matrix_solver(int n, std::complex<double> x[], std::complex<double> 
 			// Equation ordering:
 			//   w[0:N)     = electric-current testing block
 			//   w[N:2*N)   = magnetic-current testing block
+			std::fill_n(w, n, std::complex<double>{});
 			const int N = row;
 			const int maxlvl = maxLevel_;
 			const int finestIdx = maxlvl - 2;
@@ -396,7 +399,7 @@ void MLFMM::matrix_solver(int n, std::complex<double> x[], std::complex<double> 
 	}
 }
 
-void MLFMM::mlfmm_Dual_Pec_Efie(const RCSExportConfig& cfg, const std::string pol_wave)
+void MLFMM::mlfmm_Dual_Pec_Efie(const RCSExportConfig& cfg)
 {
 	auto computeV = [](MLFMM& solver, double kInc[3], double eInc[3], double hInc[3]) {
 		(void)hInc;
@@ -406,7 +409,7 @@ void MLFMM::mlfmm_Dual_Pec_Efie(const RCSExportConfig& cfg, const std::string po
 	RCSUtils::computeDualStatic(*this, cfg, computeV);
 }
 
-void MLFMM::mlfmm_Mono_Pec_Efie(const RCSExportConfig& cfg, const std::string pol_wave)
+void MLFMM::mlfmm_Mono_Pec_Efie(const RCSExportConfig& cfg)
 {
 	auto computeV = [](MLFMM& solver, double kInc[3], double eInc[3], double hInc[3]) {
 		(void)hInc;
@@ -433,7 +436,7 @@ void MLFMM::mlfmm_Mono_Pec_Efie(const RCSExportConfig& cfg, const std::string po
 	}
 }
 
-void MLFMM::mlfmm_Dual_Pec_Cfie(const RCSExportConfig& cfg, const std::string pol_wave)
+void MLFMM::mlfmm_Dual_Pec_Cfie(const RCSExportConfig& cfg)
 {
 	auto computeV = [](MLFMM& solver, double kInc[3], double eInc[3], double hInc[3]) {
 		RHS::computeV_C(solver.rwgs, solver.gausspoint,
@@ -442,7 +445,7 @@ void MLFMM::mlfmm_Dual_Pec_Cfie(const RCSExportConfig& cfg, const std::string po
 	RCSUtils::computeDualStatic(*this, cfg, computeV);
 }
 
-void MLFMM::mlfmm_Mono_Pec_Cfie(const RCSExportConfig& cfg, const std::string pol_wave)
+void MLFMM::mlfmm_Mono_Pec_Cfie(const RCSExportConfig& cfg)
 {
 	auto computeV = [this](MLFMM& solver, double kInc[3], double eInc[3], double hInc[3]) {
 		RHS::computeV_C(solver.rwgs, solver.gausspoint,
@@ -470,7 +473,7 @@ void MLFMM::mlfmm_Mono_Pec_Cfie(const RCSExportConfig& cfg, const std::string po
 	}
 }
 
-void MLFMM::mlfmm_Dual_Die_Pmchwt(const RCSExportConfig& cfg, const std::string pol_wave) {
+void MLFMM::mlfmm_Dual_Die_Pmchwt(const RCSExportConfig& cfg) {
 	auto computeV = [](MLFMM& solver, double kInc[3], double eInc[3], double hInc[3]) {
 		RHS::computeV_PMCHWT(solver.rwgs, solver.gausspoint,
 			solver.wave.k1(), kInc, eInc, hInc, solver.Vm);
@@ -478,7 +481,7 @@ void MLFMM::mlfmm_Dual_Die_Pmchwt(const RCSExportConfig& cfg, const std::string 
 	RCSUtils::computeDualStatic_PMCHWT(*this, cfg, computeV);
 }
 
-void MLFMM::mlfmm_Mono_Die_Pmchwt(const RCSExportConfig& cfg, const std::string pol_wave)
+void MLFMM::mlfmm_Mono_Die_Pmchwt(const RCSExportConfig& cfg)
 {
 	auto computeV = [](MLFMM& solver, double kInc[3], double eInc[3], double hInc[3]) {
 		RHS::computeV_PMCHWT(solver.rwgs, solver.gausspoint,

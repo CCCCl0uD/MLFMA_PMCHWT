@@ -10,6 +10,7 @@
 #include <iostream>
 #include <sstream>
 #include <vector>
+#include "SolverVectorOps.h"
 
 namespace MGMRES {
 	inline std::string formatResidual7(double value)
@@ -21,10 +22,7 @@ namespace MGMRES {
 
 	// 辅助函数：共轭点积
 	inline std::complex<double> dot_conj(int n, const std::complex<double>* a, const std::complex<double>* b) {
-		std::complex<double> sum = 0.0;
-		for (int i = 0; i < n; ++i)
-			sum += std::conj(a[i]) * b[i];
-		return sum;
+		return SolverVectorOps::dot<true>(n, a, b);
 	}
 
 	// 生成 Givens 旋转
@@ -78,7 +76,7 @@ namespace MGMRES {
 
 		// 工作向量
 		std::vector<Complex> r(n), w(n), z(n);
-		std::vector<Complex> v(n * (mr + 1));
+		std::vector<Complex> v(static_cast<std::size_t>(n) * (mr + 1));
 		std::vector<Complex> h((mr + 1) * mr, Complex(0.0, 0.0));
 		std::vector<Complex> cs(mr), sn(mr), s(mr + 1);
 		std::vector<Complex> y(mr);
@@ -88,20 +86,18 @@ namespace MGMRES {
 
 		// 初始残差 r = rhs - A*x
 		ax(n, x, w.data());                 // w = A*x
-		for (int i = 0; i < n; ++i)
-			r[i] = rhs[i] - w[i];
+		double rnorm = SolverVectorOps::residual_norm(n, rhs, w.data(), r.data());
 
-		double bnorm = std::sqrt(std::real(dot_conj(n, rhs, rhs)));
+		double bnorm = SolverVectorOps::norm2(n, rhs);
 		if (bnorm < eps) bnorm = 1.0;
 
-		double rnorm = std::sqrt(std::real(dot_conj(n, r.data(), r.data())));
 		error = rnorm / bnorm;
 		if (error < tol_rel || error < tol_abs) return true;
 
 		// 外层重启循环
 		for (int restart_cycle = 1; restart_cycle <= itr_max; ++restart_cycle) {
 			// Arnoldi 初始化
-			for (int i = 0; i < n; ++i) v[i] = r[i] / rnorm;
+			SolverVectorOps::for_each(n, [&](int i) { v[i] = r[i] / rnorm; });
 			std::fill(s.begin(), s.end(), Complex(0.0, 0.0));
 			s[0] = rnorm;
 
@@ -120,26 +116,27 @@ namespace MGMRES {
 				k_used = k + 1;
 
 				// z = v_k
-				for (int i = 0; i < n; ++i) z[i] = v[i + k * n];
+				SolverVectorOps::copy(n, v.data() + static_cast<std::size_t>(k) * n, z.data());
 
 				// 矩阵向量乘法 w = A * z
 				ax(n, z.data(), w.data());
 
 				// 修正 Gram-Schmidt 带重新正交化
 				for (int j = 0; j <= k; ++j) {
-					h[j + k * (mr + 1)] = dot_conj(n, &v[j * n], w.data());
-					for (int i = 0; i < n; ++i)
-						w[i] -= h[j + k * (mr + 1)] * v[i + j * n];
+					h[j + k * (mr + 1)] = dot_conj(n, v.data() + static_cast<std::size_t>(j) * n, w.data());
+					const Complex coefficient = h[j + k * (mr + 1)];
+					const Complex* column = v.data() + static_cast<std::size_t>(j) * n;
+					SolverVectorOps::for_each(n, [&](int i) { w[i] -= coefficient * column[i]; });
 				}
 				// 重新正交化
 				for (int j = 0; j <= k; ++j) {
-					Complex temp = dot_conj(n, &v[j * n], w.data());
+					Complex temp = dot_conj(n, v.data() + static_cast<std::size_t>(j) * n, w.data());
 					h[j + k * (mr + 1)] += temp;
-					for (int i = 0; i < n; ++i)
-						w[i] -= temp * v[i + j * n];
+					const Complex* column = v.data() + static_cast<std::size_t>(j) * n;
+					SolverVectorOps::for_each(n, [&](int i) { w[i] -= temp * column[i]; });
 				}
 
-				double h_next = std::sqrt(std::real(dot_conj(n, w.data(), w.data())));
+				double h_next = SolverVectorOps::norm2(n, w.data());
 				h[k + 1 + k * (mr + 1)] = h_next;
 
 				if (h_next < eps * rnorm) {
@@ -147,8 +144,8 @@ namespace MGMRES {
 					break;
 				}
 
-				for (int i = 0; i < n; ++i)
-					v[i + (k + 1) * n] = w[i] / h_next;
+				Complex* next_column = v.data() + static_cast<std::size_t>(k + 1) * n;
+				SolverVectorOps::for_each(n, [&](int i) { next_column[i] = w[i] / h_next; });
 
 				// 应用已有的 Givens 旋转
 				for (int j = 0; j < k; ++j) {
@@ -191,15 +188,11 @@ namespace MGMRES {
 			}
 
 			// 更新解 x = x + V * y
-			for (int j = 0; j < m; ++j) {
-				for (int i = 0; i < n; ++i)
-					x[i] += y[j] * v[i + j * n];
-			}
+			SolverVectorOps::update_solution(n, m, x, v.data(), y.data());
 
 			// 精确残差用于重启
 			ax(n, x, w.data());
-			for (int i = 0; i < n; ++i) r[i] = rhs[i] - w[i];
-			rnorm = std::sqrt(std::real(dot_conj(n, r.data(), r.data())));
+			rnorm = SolverVectorOps::residual_norm(n, rhs, w.data(), r.data());
 			error = rnorm / bnorm;
 
 			if (verbose && !converged_inner) {

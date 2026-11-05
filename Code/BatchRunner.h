@@ -2,6 +2,9 @@
 #ifndef BATCHRUNNER_H
 #define BATCHRUNNER_H
 
+#include <array>
+#include <climits>
+#include <cstddef>
 #include <string>
 #include <vector>
 #include <fstream>
@@ -12,9 +15,11 @@
 #include <exception>
 #include <chrono>
 #include <complex>
+#include <optional>
 #include <cctype>
 #include <omp.h>
 
+#include "OCTree.h"
 #include "MoM.h"
 #include "FMM.h"
 #include "MLFMM.h"
@@ -182,7 +187,9 @@ public:
 		double globalMuImag = 0.0;
 
 		std::string line;
+		std::size_t lineNo = 0;
 		while (std::getline(file, line)) {
+			++lineNo;
 			if (line.empty() || line[0] == '#') continue;
 
 			auto pos = line.find('=');
@@ -209,43 +216,69 @@ public:
 					}
 				}
 			}
-			else if (key == "incident_theta_range") {
-				auto parts = splitString(value, ':');
-				if (parts.size() == 3) {
-					double start = std::stod(parts[0]);
-					double end = std::stod(parts[1]);
-					double s = std::stod(parts[2]);
-					int count = static_cast<int>(std::round((end - start) / s)) + 1;
+			else if (key == "incident_theta_range" || key == "incident_phi_range") {
+				const auto [start, end, step] = parseIncidentRange(value, key, lineNo);
+				const auto rangeError = [&](const char* message) {
+					return incidentRangeError(key, value, lineNo, message);
+				};
 
+				if (key == "incident_theta_range") {
+					if (start < 0.0 || start > 180.0 || end < 0.0 || end > 180.0 ||
+						step == 0.0 || (start < end && step < 0.0) || (start > end && step > 0.0)) {
+						throw rangeError("expected theta in [0,180] and a nonzero step toward the end");
+					}
+
+					const double steps = std::round((end - start) / step);
+					if (!std::isfinite(steps) || steps < 0.0 || steps > INT_MAX - 1) {
+						throw rangeError("too many theta samples");
+					}
+					const double last = start + steps * step;
+					if (last < 0.0 || last > 180.0) {
+						throw rangeError("last theta sample is outside [0,180]");
+					}
+
+					const int count = static_cast<int>(steps) + 1;
 					for (int i = 0; i < count; ++i) {
-						double th = start + i * s;
-						cfg.incidentAngles.emplace_back(th, 0.0);
+						cfg.incidentAngles.emplace_back(start + i * step, 0.0);
 					}
 				}
-			}
-			else if (key == "incident_phi_range") {
-				auto parts = splitString(value, ':');
-				if (parts.size() == 3) {
-					double start = std::stod(parts[0]);
-					double end = std::stod(parts[1]);
-					double s = std::stod(parts[2]);
-					std::vector<std::pair<double, double>> expanded;
+				else {
+					if (start < 0.0 || end > 360.0 || start > end || step <= 0.0) {
+						throw rangeError("expected ascending phi in [0,360] and a positive step");
+					}
+
+					const double limit = end + 1e-9;
+					if (std::floor((limit - start) / step) > INT_MAX - 1) {
+						throw rangeError("too many phi samples");
+					}
+
+					std::vector<double> phiValues;
+					for (double phi = start; phi <= limit;) {
+						if (phiValues.size() == static_cast<std::size_t>(INT_MAX)) {
+							throw rangeError("too many phi samples");
+						}
+						phiValues.push_back(phi);
+						const double next = phi + step;
+						if (next <= phi) {
+							throw rangeError("phi step does not advance the angle");
+						}
+						phi = next;
+					}
 
 					if (cfg.incidentAngles.empty()) {
-						for (double ph = start; ph <= end + 1e-9; ph += s) {
-							expanded.emplace_back(90.0, ph);
+						cfg.incidentAngles.emplace_back(90.0, 0.0);
+					}
+					std::vector<std::pair<double, double>> expanded;
+					if (cfg.incidentAngles.size() > expanded.max_size() / phiValues.size()) {
+						throw rangeError("too many incident angles");
+					}
+					expanded.reserve(cfg.incidentAngles.size() * phiValues.size());
+					for (const auto& angle : cfg.incidentAngles) {
+						for (double phi : phiValues) {
+							expanded.emplace_back(angle.first, phi);
 						}
 					}
-					else {
-						for (const auto& [th, oldPh] : cfg.incidentAngles) {
-							(void)oldPh;
-							for (double ph = start; ph <= end + 1e-9; ph += s) {
-								expanded.emplace_back(th, ph);
-							}
-						}
-					}
-
-					cfg.incidentAngles = expanded;
+					cfg.incidentAngles.swap(expanded);
 				}
 			}
 			else if (key == "sca_theta") {
@@ -268,17 +301,17 @@ public:
 			else if (key == "algorithm") {
 				cfg.selectAlgorithms.clear();
 				for (const auto& s : splitString(value, ',')) {
-					cfg.selectAlgorithms.push_back(std::stoi(s));
+					cfg.selectAlgorithms.push_back(parseSelection(s, key));
 				}
 				if (cfg.selectAlgorithms.empty()) {
 					cfg.selectAlgorithms.push_back(2);
 				}
 			}
 			else if (key == "integral_equation") {
-				cfg.selectIntegralEqu = std::stoi(value);
+				cfg.selectIntegralEqu = parseSelection(value, key);
 			}
 			else if (key == "matrix_solver") {
-				cfg.selectMatrixSolver = std::stoi(value);
+				cfg.selectMatrixSolver = parseSelection(value, key);
 			}
 			else if (key == "mono_dual") {
 				cfg.selectMono_Dual = value;
@@ -434,6 +467,53 @@ public:
 	}
 
 private:
+	static std::invalid_argument incidentRangeError(const std::string& key,
+		const std::string& value, std::size_t lineNo, const char* message) {
+		return std::invalid_argument("Line " + std::to_string(lineNo) + ": " + key + " = " + value + " (" + message + ")");
+	}
+
+	static std::array<double, 3> parseIncidentRange(const std::string& value,
+		const std::string& key, std::size_t lineNo) {
+		const auto first = value.find(':');
+		const auto second = first == std::string::npos ? first : value.find(':', first + 1);
+		if (second == std::string::npos || value.find(':', second + 1) != std::string::npos) {
+			throw incidentRangeError(key, value, lineNo, "expected start:end:step");
+		}
+
+		const std::array<std::string, 3> fields{
+			value.substr(0, first),
+			value.substr(first + 1, second - first - 1),
+			value.substr(second + 1)
+		};
+		std::array<double, 3> range{};
+		for (std::size_t i = 0; i < fields.size(); ++i) {
+			const auto field = trim(fields[i]);
+			std::size_t consumed = 0;
+			try {
+				range[i] = std::stod(field, &consumed);
+			}
+			catch (const std::logic_error&) {
+				throw incidentRangeError(key, value, lineNo, "expected three finite numbers");
+			}
+			if (consumed != field.size() || !std::isfinite(range[i])) {
+				throw incidentRangeError(key, value, lineNo, "expected three finite numbers");
+			}
+		}
+		return range;
+	}
+
+	static int parseSelection(const std::string& value, const std::string& key) {
+		std::size_t consumed = 0;
+		try {
+			const int selection = std::stoi(value, &consumed);
+			if (consumed == value.size()) return selection;
+		}
+		catch (const std::logic_error&) {
+			throw std::invalid_argument("Invalid " + key + " value: " + value);
+		}
+		throw std::invalid_argument("Invalid " + key + " value: " + value);
+	}
+
 	static bool parseBool(const std::string& s) {
 		std::string v = trim(s);
 		for (char& ch : v) {
@@ -554,115 +634,109 @@ private:
 					+ " (must be 0 for GMRES or 1 for CGS)");
 			}
 
+			if (task.selectAlgorithm < 0 || task.selectAlgorithm > 2) {
+				throw std::invalid_argument("Invalid algorithm value: " + std::to_string(task.selectAlgorithm));
+			}
+			if (task.selectIntegralEqu < 0 || task.selectIntegralEqu > 2) {
+				throw std::invalid_argument("Invalid integral_equation value: " + std::to_string(task.selectIntegralEqu));
+			}
+			if (task.selectMono_Dual != "mono" && task.selectMono_Dual != "dual") {
+				throw std::invalid_argument("Invalid mono_dual value: " + task.selectMono_Dual);
+			}
+
+			RCSExportConfig cfg(task.nasFile);
+			cfg.selectAlgo = static_cast<selectAlgorithm>(task.selectAlgorithm);
+			cfg.integralEqu = static_cast<IntegralEquation>(task.selectIntegralEqu);
+			cfg.monoDual = (task.selectMono_Dual == "mono") ? MonoDual::Mono : MonoDual::Dual;
+			cfg.nPoints = task.N_points;
+			cfg.incTheta = task.inc_th;
+			cfg.incPhi = task.inc_ph;
+			cfg.scaThetaStart = task.sca_th_s;
+			cfg.scaThetaEnd = task.sca_th_f;
+			cfg.scaPhiStart = task.sca_ph_s;
+			cfg.scaPhiEnd = task.sca_ph_f;
+			cfg.scaStep = task.step;
+			cfg.useFSBMono = task.useFSBMono;
+			cfg.fsbRho = task.fsbRho;
+			cfg.exportFSBComplexField = task.exportFSBComplexField;
+			cfg.exportFSBSamples = task.exportFSBSamples;
+			cfg.useFSBMLFMAMoving = task.useFSBMLFMAMoving;
+			cfg.movingPathFile = task.movingPathFile;
+			cfg.radarX = task.radarX;
+			cfg.radarY = task.radarY;
+			cfg.radarZ = task.radarZ;
+			cfg.movingAngleMarginDeg = task.movingAngleMarginDeg;
+			cfg.movingAngleMergeTolDeg = task.movingAngleMergeTolDeg;
+			cfg.exportMovingAngles = task.exportMovingAngles;
+			cfg.exportMovingComplexField = task.exportMovingComplexField;
+			cfg.exportMovingSamples = task.exportMovingSamples;
+			cfg.useAccurateMLFMAMoving = task.useAccurateMLFMAMoving;
+			cfg.useACARHSMoving = task.useACARHSMoving;
+			cfg.acaRHSTol = task.acaRHSTol;
+			cfg.acaRHSMaxRank = task.acaRHSMaxRank;
+			cfg.acaRHSPivotEps = task.acaRHSPivotEps;
+			cfg.exportACARHSCheck = task.exportACARHSCheck;
+			cfg.acaRHSCheckCount = task.acaRHSCheckCount;
+			cfg.exportACARHSFactors = task.exportACARHSFactors;
+			if (cfg.integralEqu == IntegralEquation::PMCHWT) {
+				cfg.material = materialType::Die;
+				cfg.epsilonR = {task.epsilonR_real, task.epsilonR_imag};
+				cfg.muR = {task.muR_real, task.muR_imag};
+			}
+			cfg.validate();
+			gaussPoints gausspoint(cfg.nPoints);
+
 			std::vector<Point> points;
 			std::vector<FaceElement> faces;
 
-			if (readNasData(task.nasFile, points, faces) != 0) {
+			MeshReadReport meshReport;
+			if (readNasData(task.nasFile, points, faces, meshReport) != 0) {
 				std::cerr << "Error: Failed to read NAS file: " << task.nasFile << "\n";
 				return 1;
 			}
 
 			std::vector<RWGBase> rwgBases;
-			if (!RWGGenerator::GenerateRWG(faces, points, rwgBases)) {
+			RWGOptions rwgOptions;
+			rwgOptions.requireClosedSurface = cfg.integralEqu != IntegralEquation::EFIE;
+			RWGGenerationReport rwgReport;
+			if (!RWGGenerator::GenerateRWG(faces, points, rwgBases, rwgOptions, rwgReport)) {
 				std::cerr << "Error: RWG generation failed\n";
 				return 2;
 			}
 
-			EMSource waveForTree(task.freq, 90.0);
-			std::complex<double> epsilonR(task.epsilonR_real, task.epsilonR_imag);
-			std::complex<double> muR(task.muR_real, task.muR_imag);
-
-			if (task.selectIntegralEqu == 2) {
-				waveForTree.initDielectric(epsilonR, muR);
+			std::optional<OCTree> octree;
+			if (cfg.selectAlgo != selectAlgorithm::MoM) {
+				EMSource waveForTree(task.freq, 90.0);
+				if (cfg.material == materialType::Die) {
+					waveForTree.initDielectric(cfg.epsilonR, cfg.muR);
+				}
+				octree.emplace(rwgBases, waveForTree.wavelength(), task.nasFile);
 			}
 
-			gaussPoints gausspoint(task.N_points);
-			OCTree octree(rwgBases, waveForTree.wavelength(), task.nasFile);
-
-			const std::string pols[2] = { "h", "v" };
-
-			for (const auto& pol : pols) {
-				std::cout << "  >> Computing polarization: " << pol << "\n";
-
-				double polVal = (pol == "v") ? 0.0 : 90.0;
-				EMSource wave(task.freq, polVal);
-
-				if (task.selectIntegralEqu == 2) {
-					wave.initDielectric(epsilonR, muR);
+			const double E0 = 1.0;
+			for (const auto pol : {Polarization::H, Polarization::V}) {
+				cfg.polWave = pol;
+				const bool vertical = pol == Polarization::V;
+				const char* polName = vertical ? "v" : "h";
+				std::cout << "  >> Computing polarization: " << polName << "\n";
+				EMSource wave(task.freq, vertical ? 0.0 : 90.0);
+				if (cfg.material == materialType::Die) {
+					wave.initDielectric(cfg.epsilonR, cfg.muR);
 				}
 
-				RCSExportConfig cfg(task.nasFile);
-
-				if (task.selectAlgorithm < 0 || task.selectAlgorithm > 2) {
-					throw std::invalid_argument(
-						"Invalid algorithm value: "
-						+ std::to_string(task.selectAlgorithm));
+				if (cfg.selectAlgo == selectAlgorithm::MoM) {
+					MoM mom(cfg, task.selectMatrixSolver, rwgBases, gausspoint, E0, wave);
+				}
+				else if (cfg.selectAlgo == selectAlgorithm::FMM) {
+					FMM fmm(cfg, task.selectMatrixSolver, octree->octreeNodes_, rwgBases,
+						octree->maxLevel_, gausspoint, E0, wave);
+				}
+				else if (cfg.selectAlgo == selectAlgorithm::MLFMA) {
+					MLFMM mlfmm(cfg, task.selectMatrixSolver, octree->octreeNodes_, octree->octreeNodesDRvec_,
+						rwgBases, octree->maxLevel_, gausspoint, E0, wave);
 				}
 
-				cfg.selectAlgo = static_cast<selectAlgorithm>(task.selectAlgorithm);
-				cfg.material = (task.selectIntegralEqu == 2) ? materialType::Die : materialType::PEC;
-				cfg.integralEqu = (task.selectIntegralEqu == 0) ? IntegralEquation::EFIE :
-					(task.selectIntegralEqu == 2) ? IntegralEquation::PMCHWT :
-					IntegralEquation::CFIE;
-				cfg.monoDual = (task.selectMono_Dual == "mono") ? MonoDual::Mono : MonoDual::Dual;
-				cfg.polWave = (pol == "v") ? Polarization::V : Polarization::H;
-				cfg.nPoints = task.N_points;
-				cfg.incTheta = task.inc_th;
-				cfg.incPhi = task.inc_ph;
-				cfg.scaThetaStart = task.sca_th_s;
-				cfg.scaThetaEnd = task.sca_th_f;
-				cfg.scaPhiStart = task.sca_ph_s;
-				cfg.scaPhiEnd = task.sca_ph_f;
-				cfg.scaStep = task.step;
-				cfg.useFSBMono = task.useFSBMono;
-				cfg.fsbRho = task.fsbRho;
-				cfg.exportFSBComplexField = task.exportFSBComplexField;
-				cfg.exportFSBSamples = task.exportFSBSamples;
-				cfg.useFSBMLFMAMoving = task.useFSBMLFMAMoving;
-				cfg.movingPathFile = task.movingPathFile;
-				cfg.radarX = task.radarX;
-				cfg.radarY = task.radarY;
-				cfg.radarZ = task.radarZ;
-				cfg.movingAngleMarginDeg = task.movingAngleMarginDeg;
-				cfg.movingAngleMergeTolDeg = task.movingAngleMergeTolDeg;
-				cfg.exportMovingAngles = task.exportMovingAngles;
-				cfg.exportMovingComplexField = task.exportMovingComplexField;
-				cfg.exportMovingSamples = task.exportMovingSamples;
-				cfg.useAccurateMLFMAMoving = task.useAccurateMLFMAMoving;
-				cfg.useACARHSMoving = task.useACARHSMoving;
-				cfg.acaRHSTol = task.acaRHSTol;
-				cfg.acaRHSMaxRank = task.acaRHSMaxRank;
-				cfg.acaRHSPivotEps = task.acaRHSPivotEps;
-				cfg.exportACARHSCheck = task.exportACARHSCheck;
-				cfg.acaRHSCheckCount = task.acaRHSCheckCount;
-				cfg.exportACARHSFactors = task.exportACARHSFactors;
-
-				if (task.selectIntegralEqu == 2) {
-					cfg.epsilonR = epsilonR;
-					cfg.muR = muR;
-				}
-
-				cfg.validate();
-
-				double E0 = 1.0;
-
-				if (task.selectAlgorithm == 0) {
-					MoM mom(cfg, task.selectIntegralEqu, task.selectMatrixSolver, task.selectMono_Dual,
-						pol, octree.octreeNodes_, rwgBases,
-						octree.maxLevel_, gausspoint, E0, wave);
-				}
-				else if (task.selectAlgorithm == 1) {
-					FMM fmm(cfg, task.selectIntegralEqu, task.selectMatrixSolver, task.selectMono_Dual,
-						pol, octree.octreeNodes_, rwgBases,
-						octree.maxLevel_, gausspoint, E0, wave);
-				}
-				else if (task.selectAlgorithm == 2) {
-					MLFMM mlfmm(cfg, task.selectIntegralEqu, task.selectMatrixSolver, task.selectMono_Dual,
-						pol, octree.octreeNodes_, octree.octreeNodesDRvec_,
-						rwgBases, octree.maxLevel_, gausspoint, E0, wave);
-				}
-
-				std::cout << "  >> Polarization " << pol << " done.\n";
+				std::cout << "  >> Polarization " << polName << " done.\n";
 			}
 
 			return 0;

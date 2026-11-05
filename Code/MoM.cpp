@@ -7,10 +7,10 @@
 #include "MoM.h"
 
 MoM::MoM(
-	const RCSExportConfig& cfg, const int selectIntegralEqu, const int selectMatrixSolver, const std::string selectMono_Dual, const std::string pol_wave,
-	const std::vector<std::vector<OCTree::Node*>>& octreeNodes, const std::vector<RWGBase>& rwgs, const int maxLevel_,
+	const RCSExportConfig& cfg, int selectMatrixSolver,
+	const std::vector<RWGBase>& rwgs,
 	const gaussPoints& gausspoint, const double E0, const EMSource& wave)
-	: octreeNodes_(octreeNodes), rwgs(rwgs), maxLevel_(maxLevel_), gausspoint(gausspoint), E0(E0), wave(wave), integralEquType_(selectIntegralEqu), matrixSolverType_(selectMatrixSolver)
+	: rwgs(rwgs), gausspoint(gausspoint), E0(E0), wave(wave), integralEquType_(static_cast<int>(cfg.integralEqu)), matrixSolverType_(selectMatrixSolver)
 {
 	row = static_cast<int>(rwgs.size());
 
@@ -19,12 +19,12 @@ MoM::MoM(
 
 		//exportZ(cfg);
 
-		if (selectMono_Dual == "dual") {
-			mom_Dual_Pec_Efie(cfg, pol_wave);
+		if (cfg.monoDual == MonoDual::Dual) {
+			mom_Dual_Pec_Efie(cfg);
 		}
 
-		if (selectMono_Dual == "mono") {
-			mom_Mono_Pec_Efie(cfg, pol_wave);
+		if (cfg.monoDual == MonoDual::Mono) {
+			mom_Mono_Pec_Efie(cfg);
 		}
 	}
 
@@ -33,12 +33,12 @@ MoM::MoM(
 
 		//exportZ(cfg);
 
-		if (selectMono_Dual == "dual") {
-			mom_Dual_Pec_Cfie(cfg, pol_wave);
+		if (cfg.monoDual == MonoDual::Dual) {
+			mom_Dual_Pec_Cfie(cfg);
 		}
 
-		if (selectMono_Dual == "mono") {
-			mom_Mono_Pec_Cfie(cfg, pol_wave);
+		if (cfg.monoDual == MonoDual::Mono) {
+			mom_Mono_Pec_Cfie(cfg);
 		}
 	}
 
@@ -47,22 +47,18 @@ MoM::MoM(
 
 		//exportZ(cfg);
 
-		if (selectMono_Dual == "dual") {
-			mom_Dual_Die_Pmchwt(cfg, pol_wave);
+		if (cfg.monoDual == MonoDual::Dual) {
+			mom_Dual_Die_Pmchwt(cfg);
 		}
 
-		if (selectMono_Dual == "mono") {
-			mom_Mono_Die_Pmchwt(cfg, pol_wave);
+		if (cfg.monoDual == MonoDual::Mono) {
+			mom_Mono_Die_Pmchwt(cfg);
 		}
 	}
 }
 
 void MoM::exportZ(const RCSExportConfig& cfg) {
 	auto zFile = cfg.openFile("_Zmatrix", "txt");
-	if (!zFile.is_open()) {
-		std::cerr << "Error: Failed to open file for Z matrix export." << std::endl;
-		return;
-	}
 
 	zFile << std::setprecision(17);
 	zFile << "row\tcol\treal\timag\n";
@@ -123,7 +119,7 @@ void MoM::matrix_solver(
 	}
 }
 
-void MoM::mom_Dual_Pec_Efie(const RCSExportConfig& cfg, const std::string pol_wave)
+void MoM::mom_Dual_Pec_Efie(const RCSExportConfig& cfg)
 {
 	// computeV lambda (EFIE)
 	auto computeV = [](MoM& solver, double kInc[3], double eInc[3], double hInc[3]) {
@@ -134,7 +130,7 @@ void MoM::mom_Dual_Pec_Efie(const RCSExportConfig& cfg, const std::string pol_wa
 	RCSUtils::computeDualStatic(*this, cfg, computeV);
 }
 
-void MoM::mom_Mono_Pec_Efie(const RCSExportConfig& cfg, const std::string pol_wave)
+void MoM::mom_Mono_Pec_Efie(const RCSExportConfig& cfg)
 {
 	auto computeV = [](MoM& solver, double kInc[3], double eInc[3], double hInc[3]) {
 		(void)hInc;
@@ -144,7 +140,7 @@ void MoM::mom_Mono_Pec_Efie(const RCSExportConfig& cfg, const std::string pol_wa
 	RCSUtils::computeMonoStatic(*this, cfg, computeV);
 }
 
-void MoM::mom_Dual_Pec_Cfie(const RCSExportConfig& cfg, const std::string pol_wave)
+void MoM::mom_Dual_Pec_Cfie(const RCSExportConfig& cfg)
 {
 	auto computeV = [](MoM& solver, double kInc[3], double eInc[3], double hInc[3]) {
 		RHS::computeV_C(solver.rwgs, solver.gausspoint,
@@ -153,7 +149,7 @@ void MoM::mom_Dual_Pec_Cfie(const RCSExportConfig& cfg, const std::string pol_wa
 	RCSUtils::computeDualStatic(*this, cfg, computeV);
 }
 
-void MoM::mom_Mono_Pec_Cfie(const RCSExportConfig& cfg, const std::string pol_wave)
+void MoM::mom_Mono_Pec_Cfie(const RCSExportConfig& cfg)
 {
 	auto computeV = [](MoM& solver, double kInc[3], double eInc[3], double hInc[3]) {
 		RHS::computeV_C(solver.rwgs, solver.gausspoint,
@@ -162,7 +158,7 @@ void MoM::mom_Mono_Pec_Cfie(const RCSExportConfig& cfg, const std::string pol_wa
 	RCSUtils::computeMonoStatic(*this, cfg, computeV);
 }
 
-void MoM::mom_Dual_Die_Pmchwt(const RCSExportConfig& cfg, const std::string pol_wave)
+void MoM::mom_Dual_Die_Pmchwt(const RCSExportConfig& cfg)
 {
 	auto computeV = [](MoM& solver, double kInc[3], double eInc[3], double hInc[3]) {
 		RHS::computeV_PMCHWT(solver.rwgs, solver.gausspoint,
@@ -171,7 +167,7 @@ void MoM::mom_Dual_Die_Pmchwt(const RCSExportConfig& cfg, const std::string pol_
 	RCSUtils::computeDualStatic_PMCHWT(*this, cfg, computeV);
 }
 
-void MoM::mom_Mono_Die_Pmchwt(const RCSExportConfig& cfg, const std::string pol_wave)
+void MoM::mom_Mono_Die_Pmchwt(const RCSExportConfig& cfg)
 {
 	auto computeV = [](MoM& solver, double kInc[3], double eInc[3], double hInc[3]) {
 		RHS::computeV_PMCHWT(solver.rwgs, solver.gausspoint,

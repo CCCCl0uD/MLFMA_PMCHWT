@@ -11,7 +11,7 @@
 class MLFMM {
 public:
 	MLFMM(
-		const RCSExportConfig& cfg, const int selectIntegralEqu, const int selectMatrixSolver, const std::string selectMono_Dual, const std::string pol_wave,
+		const RCSExportConfig& cfg, int selectMatrixSolver,
 		const std::vector<std::vector<OCTree::Node*>>& octreeNodes,
 		const std::vector<std::vector<OCTree::nodePoint>>& octreeNodesDRvec_,
 		const std::vector<RWGBase>& rwgs, const int maxLevel_,
@@ -73,11 +73,11 @@ public:
 private:
 	void initPECWorkspace();
 	void initDIEWorkspace();
-	void mlfmm_Dual_Pec_Efie(const RCSExportConfig& cfg, const std::string pol_wave);
-	void mlfmm_Mono_Pec_Efie(const RCSExportConfig& cfg, const std::string pol_wave);
-	void mlfmm_Dual_Pec_Cfie(const RCSExportConfig& cfg, const std::string pol_wave);
-	void mlfmm_Mono_Pec_Cfie(const RCSExportConfig& cfg, const std::string pol_wave);
-	void mlfmm_Dual_Die_Pmchwt(const RCSExportConfig& cfg, const std::string pol_wave);
-	void mlfmm_Mono_Die_Pmchwt(const RCSExportConfig& cfg, const std::string pol_wave);
+	void mlfmm_Dual_Pec_Efie(const RCSExportConfig& cfg);
+	void mlfmm_Mono_Pec_Efie(const RCSExportConfig& cfg);
+	void mlfmm_Dual_Pec_Cfie(const RCSExportConfig& cfg);
+	void mlfmm_Mono_Pec_Cfie(const RCSExportConfig& cfg);
+	void mlfmm_Dual_Die_Pmchwt(const RCSExportConfig& cfg);
+	void mlfmm_Mono_Die_Pmchwt(const RCSExportConfig& cfg);
 };
 #endif // MLFMM_H

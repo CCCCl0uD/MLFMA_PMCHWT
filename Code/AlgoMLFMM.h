@@ -8,6 +8,9 @@
 #include <chrono>
 #include <complex>
 #include <array>
+#include <cassert>
+#include <stdexcept>
+#include <string>
 #include <thread>
 #include <iostream>
 #include <iomanip>
@@ -140,7 +143,7 @@ namespace AlgoMLFMM {
 	// 2. 插值位置查找（二分搜索）
 	inline std::array<int, 3> find_interp_pos(double target, const std::vector<double>& arr, bool periodic = true) {
 		int n = static_cast<int>(arr.size());
-		if (n < 3) return { -1, -1, -1 };
+		assert(n >= 3);
 		double delta = arr[1] - arr[0];
 		bool ascending = delta > 0;
 		int lo = 0, hi = n - 1, mid = 0;
@@ -198,20 +201,18 @@ namespace AlgoMLFMM {
 	{
 		auto t_start = std::chrono::high_resolution_clock::now();
 
+		if (maxLevel_ < 2) {
+			throw std::invalid_argument("MLFMA transfer factors require maxLevel >= 2 (got " +
+				std::to_string(maxLevel_) + ")");
+		}
 		const int span = maxLevel_ - 1;
+		const auto levelCount = static_cast<std::size_t>(span);
+		if (kp_lvl.size() < levelCount || L_lvl.size() < levelCount || octreeNodesDRvec.size() < levelCount) {
+			throw std::invalid_argument("MLFMA transfer factors require " + std::to_string(span) +
+				" levels (kp=" + std::to_string(kp_lvl.size()) + ", L=" + std::to_string(L_lvl.size()) +
+				", distant vectors=" + std::to_string(octreeNodesDRvec.size()) + ")");
+		}
 
-		if (maxLevel_ - 1 <= 0) {
-			std::cerr << "Warning: maxLevel_ too small, cannot compute transfer matrix" << std::endl;
-			return;
-		}
-		if (kp_lvl.empty()) {
-			std::cerr << "Error: kp_level not initialized" << std::endl;
-			return;
-		}
-		if (static_cast<int>(kp_lvl.size()) < span || static_cast<int>(L_lvl.size()) < span) {
-			std::cerr << "Error: kp_lvl or L_lvl size mismatch in computeTransferFactorMatrix" << std::endl;
-			return;
-		}
 		TF.resize(maxLevel_ - 1);
 		for (int i = 0; i < (maxLevel_ - 1); ++i) {
 			int vec_at_level = static_cast<int>(octreeNodesDRvec[i].size());
@@ -303,8 +304,40 @@ namespace AlgoMLFMM {
 		int maxLevel_)
 	{
 		auto t_start = std::chrono::high_resolution_clock::now();
+		if (maxLevel_ < 2) {
+			throw std::invalid_argument("MLFMA interpolation requires maxLevel >= 2 (got " +
+				std::to_string(maxLevel_) + ")");
+		}
+		if (maxLevel_ == 2) {
+			interpol.clear();
+			return;
+		}
+
 		const int span = maxLevel_ - 1;
-		int levels = maxLevel_ - 2;
+		const int levels = maxLevel_ - 2;
+		const auto levelCount = static_cast<std::size_t>(span);
+		if (kp_lvl.size() < levelCount || theta_level.size() < levelCount || phi_level.size() < levelCount) {
+			throw std::invalid_argument("MLFMA interpolation requires " + std::to_string(span) +
+				" levels (kp=" + std::to_string(kp_lvl.size()) + ", theta=" + std::to_string(theta_level.size()) +
+				", phi=" + std::to_string(phi_level.size()) + ")");
+		}
+
+		for (int level = 0; level < levels; ++level) {
+			const int revF = span - 1 - level;
+			const int revS = revF - 1;
+			const auto thetaCount = theta_level[revF].size();
+			const auto phiCount = phi_level[revF].size();
+			const auto kpCount = kp_lvl[revF].size();
+			if (thetaCount == 0 || phiCount == 0 || kpCount / phiCount != thetaCount || kpCount % phiCount != 0) {
+				throw std::invalid_argument("MLFMA interpolation target grid size mismatch at level " +
+					std::to_string(level + 2));
+			}
+			if (theta_level[revS].size() < 3 || phi_level[revS].size() < 3) {
+				throw std::invalid_argument("MLFMA interpolation requires three theta and phi samples at level " +
+					std::to_string(level + 3));
+			}
+		}
+
 		interpol.resize(levels);
 		for (int lvl = 0; lvl < levels; ++lvl) {
 			int rev = span - 1 - lvl;
