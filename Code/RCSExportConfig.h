@@ -113,7 +113,7 @@ struct RCSExportConfig {
 		if (movingModeCount > 1) return false;
 		const bool hasMovingRadar =
 			(radarX * radarX + radarY * radarY + radarZ * radarZ) > 0.0;
-		if (useAccurateMLFMAMoving) {
+		if (movingModeCount == 1) {
 			if (selectAlgo != selectAlgorithm::MLFMA) return false;
 			if (material != materialType::PEC) return false;
 			if (monoDual != MonoDual::Mono) return false;
@@ -122,22 +122,10 @@ struct RCSExportConfig {
 			if (!hasMovingRadar) return false;
 		}
 		if (useFSBMLFMAMoving) {
-			if (selectAlgo != selectAlgorithm::MLFMA) return false;
-			if (material != materialType::PEC) return false;
-			if (monoDual != MonoDual::Mono) return false;
-			if (integralEqu == IntegralEquation::PMCHWT) return false;
-			if (movingPathFile.empty()) return false;
-			if (!hasMovingRadar) return false;
 			if (movingAngleMarginDeg < 0.0) return false;
 			if (movingAngleMergeTolDeg <= 0.0) return false;
 		}
 		if (useACARHSMoving) {
-			if (selectAlgo != selectAlgorithm::MLFMA) return false;
-			if (material != materialType::PEC) return false;
-			if (monoDual != MonoDual::Mono) return false;
-			if (integralEqu == IntegralEquation::PMCHWT) return false;
-			if (movingPathFile.empty()) return false;
-			if (!hasMovingRadar) return false;
 			if (acaRHSTol <= 0.0) return false;
 			if (acaRHSMaxRank < 0) return false;
 			if (acaRHSPivotEps <= 0.0) return false;

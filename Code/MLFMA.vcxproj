@@ -173,6 +173,7 @@
     <ClInclude Include="BatchRunner.h" />
     <ClInclude Include="Bessel.h" />
     <ClInclude Include="CGS.h" />
+    <ClInclude Include="SolverVectorOps.h" />
     <ClInclude Include="EFIE.h" />
     <ClInclude Include="EMSource.h" />
     <ClInclude Include="FMM.h" />

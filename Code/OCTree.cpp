@@ -1,13 +1,13 @@
 ﻿// OCTree.cpp
 #include "OCTree.h"
 #include "PathUtils.h"
-#include "OverloadAlgo.h"
+#include "PhyConstant.h"
 
 #include <algorithm>
-#include <functional>
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <unordered_map>
 #include <unordered_set>
 
 OCTree::OCTree(const std::vector<RWGBase>& rwgs, double wavelength, const std::string& nasPath)
@@ -24,8 +24,6 @@ OCTree::OCTree(const std::vector<RWGBase>& rwgs, double wavelength, const std::s
 	buildNearNeighbors();
 
 	buildDistantRelatives();
-
-	verifyNeighborsAndDR();
 
 	/*exportOctreeToFile();
 	exportNodeToFile();*/
@@ -548,93 +546,4 @@ void OCTree::getDRVec() {
 			}
 		}
 	}
-}
-
-void OCTree::verifyNeighborsAndDR() {
-	std::cout << "\n========== Verifying Near & DR ==========\n";
-
-	for (int level = 2; level <= maxLevel_; ++level) {
-		const auto& nodes = octreeNodes_[level];
-
-		int nearError = 0;
-		int drError = 0;
-
-		for (Node* a : nodes) {
-			std::unordered_set<Node*> nearTruth;
-			std::unordered_set<Node*> drTruth;
-
-			// ===== 1. 几何 brute force =====
-			for (Node* b : nodes) {
-				if (a == b) continue;
-
-				bool nearGeom = cubeNear(a, b);
-
-				if (nearGeom) {
-					nearTruth.insert(b);
-				}
-				else {
-					// 判断是否为远亲
-					Node* pa = a->realFather;
-					Node* pb = b->realFather;
-
-					if (pa && pb && cubeNear(pa, pb)) {
-						drTruth.insert(b);
-					}
-				}
-			}
-
-			// ===== 2. 验证 near =====
-			std::unordered_set<Node*> nearBuilt(
-				a->nearNeighbors.begin(),
-				a->nearNeighbors.end()
-			);
-
-			for (auto* n : nearTruth) {
-				if (!nearBuilt.count(n)) {
-					nearError++;
-				}
-			}
-
-			for (auto* n : nearBuilt) {
-				if (!nearTruth.count(n)) {
-					nearError++;
-				}
-			}
-
-			// ===== 3. 验证 DR =====
-			std::unordered_set<Node*> drBuilt(
-				a->distantRelatives.begin(),
-				a->distantRelatives.end()
-			);
-
-			for (auto* d : drTruth) {
-				if (!drBuilt.count(d)) {
-					drError++;
-				}
-			}
-
-			for (auto* d : drBuilt) {
-				if (!drTruth.count(d)) {
-					drError++;
-				}
-			}
-		}
-
-		std::cout << "Level " << level
-			<< "  Near Error = " << nearError
-			<< "  DR Error = " << drError
-			<< std::endl;
-	}
-
-	std::cout << "=========================================\n";
-}
-
-bool OCTree::cubeNear(Node* a, Node* b) {
-	double dx = std::fabs(a->center.x - b->center.x);
-	double dy = std::fabs(a->center.y - b->center.y);
-	double dz = std::fabs(a->center.z - b->center.z);
-
-	double len = 1.01 * a->cubeLength;
-
-	return (dx <= len && dy <= len && dz <= len);
 }
