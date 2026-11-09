@@ -135,16 +135,17 @@ namespace ComplexBessel {
 	}
 
 	// 批量计算 h_l^(2)(z) for l = 0, 1, ..., L（更高效）
-	inline void spherical_hankel_2_array(int L, const std::complex<double>& z,
-		std::vector<std::complex<double>>& h2) {
-		std::vector<std::complex<double>> jn, yn;
-		sph_bessel_j_array(L, z, jn);
-		sph_neumann_y_array(L, z, yn);
-		h2.resize(L + 1);
-		const std::complex<double> imag_unit(0.0, 1.0);
-		for (int l = 0; l <= L; ++l) {
-			h2[l] = jn[l] - imag_unit * yn[l];
-		}
+	inline void spherical_hankel_2_array(int order, const std::complex<double>& z,
+		std::vector<std::complex<double>>& h) {
+		const std::complex<double> i(0.0, 1.0);
+		const auto inverse = 1.0 / z;
+		const auto seed = std::exp(-i * z) * inverse;
+		h.resize(order + 1);
+		h[0] = i * seed;
+		if (order == 0) return;
+		h[1] = seed * (i * inverse - 1.0);
+		for (int l = 1; l < order; ++l)
+			h[l + 1] = (2.0 * l + 1.0) * inverse * h[l] - h[l - 1];
 	}
 }
 

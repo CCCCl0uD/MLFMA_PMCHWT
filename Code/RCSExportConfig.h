@@ -31,6 +31,7 @@ struct RCSExportConfig {
 	double scaThetaEnd{ 0.0 }, scaPhiEnd{ 0.0 };
 	double scaStep{ 1.0 };
 	bool useFSBMono{ false };
+	bool useCalderonV1{ false };
 	double fsbRho{ 1.2 };
 	bool exportFSBComplexField{ false };
 	bool exportFSBSamples{ false };
@@ -140,6 +141,26 @@ struct RCSExportConfig {
 		}
 	}
 
+	void finalizeTask(int matrixSolver, double frequency) {
+		const int algorithm = static_cast<int>(selectAlgo);
+		const int equation = static_cast<int>(integralEqu);
+		if (algorithm < 0 || algorithm > 2 || equation < 0 || equation > 2 ||
+			matrixSolver < 0 || matrixSolver > 1)
+			throw std::invalid_argument("Invalid algorithm, integral_equation or matrix_solver");
+		material = integralEqu == IntegralEquation::PMCHWT ? materialType::Die : materialType::PEC;
+		validate();
+		if (useCalderonV1) {
+			const auto passive = [](const std::complex<double>& value) {
+				return std::isfinite(value.real()) && std::isfinite(value.imag()) &&
+					value.real() > 0.0 && value.imag() <= 0.0;
+			};
+			if (selectAlgo != selectAlgorithm::MLFMA || integralEqu != IntegralEquation::PMCHWT ||
+				useFSBMono || !(frequency > 0.0) || !std::isfinite(frequency) ||
+				!passive(epsilonR) || !passive(muR))
+				throw std::invalid_argument("Calderon v1 requires static MLFMA PMCHWT and passive material");
+		}
+	}
+
 	// ö��ת�ַ����������ļ�����
 	std::string algoStr() const {
 		switch (selectAlgo) {
@@ -185,6 +206,7 @@ struct RCSExportConfig {
 			<< monoDualStr() << "_"
 			<< polWaveStr() << "_"
 			<< nPoints << "pts";
+		if (useCalderonV1) oss << "_CalderonV1";
 		if (useAccurateMLFMAMoving) {
 			oss << "_AccurateMLFMAMoving";
 		}

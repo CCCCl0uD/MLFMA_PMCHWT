@@ -23,7 +23,7 @@
 namespace AlgoMLFMM {
 	inline void computeBase_MLFMM(
 		const std::vector<std::vector<OCTree::Node*>>& octreeNodes,
-		const EMSource& wave, const int integralEquType_,
+		double kAbs1, double kAbs2, const int integralEquType_,
 		int maxLevel_, int rwgSize, std::vector<int>& L_k1, std::vector<int>& L_k2, int& row, int& levelSpan,
 		std::vector<std::vector<double>>& WGL_k1, std::vector<std::vector<double>>& WGL_k2,
 		std::vector<double>& WGL_phi_k1, std::vector<double>& WGL_phi_k2,
@@ -105,10 +105,10 @@ namespace AlgoMLFMM {
 				}
 			};
 
-		buildAngularGrid(wave.k1_abs(), L_k1, WGL_k1, WGL_phi_k1, theta_level_k1, phi_level_k1, kp_lvl_k1);
+		buildAngularGrid(kAbs1, L_k1, WGL_k1, WGL_phi_k1, theta_level_k1, phi_level_k1, kp_lvl_k1);
 
 		if (integralEquType_ == 2) {
-			buildAngularGrid(wave.k2_abs(), L_k2, WGL_k2, WGL_phi_k2, theta_level_k2, phi_level_k2, kp_lvl_k2);
+			buildAngularGrid(kAbs2, L_k2, WGL_k2, WGL_phi_k2, theta_level_k2, phi_level_k2, kp_lvl_k2);
 		}
 
 		auto printAngularGridInfo = [&](const char* tag,
@@ -226,6 +226,7 @@ namespace AlgoMLFMM {
 		}
 		for (int level = 0; level < maxLevel_ - 1; ++level) {
 			int totalVec = static_cast<int>(octreeNodesDRvec[level].size());
+			if (totalVec == 0) continue;
 			int rev = span - 1 - level;
 
 			const int L_ = L_lvl[rev];
@@ -263,7 +264,10 @@ namespace AlgoMLFMM {
 				std::complex<double> kR = k_wavenumber * Rpq;
 				int L = std::min(L_, static_cast<int>(std::ceil(std::abs(kR))));
 				std::vector<std::complex<double>> h2_array;
-				Bessel::spherical_hankel_2_array(L, std::abs(kR), h2_array);
+				if (kR.imag() == 0.0)
+					Bessel::spherical_hankel_2_array(L, std::abs(kR), h2_array);
+				else
+					ComplexBessel::spherical_hankel_2_array(L, kR, h2_array);
 
 				auto& kpLevel = kp_lvl[rev];
 

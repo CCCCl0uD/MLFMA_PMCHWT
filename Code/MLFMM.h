@@ -7,6 +7,8 @@
 #include "RCSExportConfig.h"
 #include "EMSource.h"
 #include "GaussPoints.h"
+#include "CalderonV1.h"
+#include <optional>
 
 class MLFMM {
 public:
@@ -15,7 +17,8 @@ public:
 		const std::vector<std::vector<OCTree::Node*>>& octreeNodes,
 		const std::vector<std::vector<OCTree::nodePoint>>& octreeNodesDRvec_,
 		const std::vector<RWGBase>& rwgs, const int maxLevel_,
-		const gaussPoints& gausspoint, const double E0, const EMSource& wave);
+		const gaussPoints& gausspoint, const double E0, const EMSource& wave,
+		const CalderonGeometry* cpData = nullptr);
 
 	const std::vector<std::vector<OCTree::Node*>>& octreeNodes_;    // Octree节点索引
 	const std::vector<std::vector<OCTree::nodePoint>>& octreeNodesDRvec_; // 远亲节点的向量(2, 3, ...., maxLevel_ - 1, maxLevel_)
@@ -71,6 +74,7 @@ public:
 	void matrix_solver(int n, std::complex<double> x[], std::complex<double> rhs[], int itr_max, int mr, double tol_abs, double tol_rel);
 
 private:
+	std::optional<CalderonV1> calderon_;
 	void initPECWorkspace();
 	void initDIEWorkspace();
 	void mlfmm_Dual_Pec_Efie(const RCSExportConfig& cfg);

@@ -139,14 +139,6 @@ namespace MGMRES {
 				double h_next = SolverVectorOps::norm2(n, w.data());
 				h[k + 1 + k * (mr + 1)] = h_next;
 
-				if (h_next < eps * rnorm) {
-					if (verbose) std::cout << "MGMRES warning: Krylov subspace linearly dependent\n";
-					break;
-				}
-
-				Complex* next_column = v.data() + static_cast<std::size_t>(k + 1) * n;
-				SolverVectorOps::for_each(n, [&](int i) { next_column[i] = w[i] / h_next; });
-
 				// 应用已有的 Givens 旋转
 				for (int j = 0; j < k; ++j) {
 					apply_givens(h[j + k * (mr + 1)], h[j + 1 + k * (mr + 1)], cs[j], sn[j]);
@@ -165,6 +157,9 @@ namespace MGMRES {
 					converged_inner = true;
 					break;
 				}
+				if (h_next <= eps * rnorm) break;
+				Complex* next_column = v.data() + static_cast<std::size_t>(k + 1) * n;
+				SolverVectorOps::for_each(n, [&](int i) { next_column[i] = w[i] / h_next; });
 			}
 
 			// 回代求解最小二乘问题

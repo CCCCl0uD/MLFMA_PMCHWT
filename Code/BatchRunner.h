@@ -51,6 +51,7 @@ struct SimTask {
 	double muR_real, muR_imag;
 	int ompThreads;
 	bool useFSBMono;
+	bool useCalderonV1 = false;
 	double fsbRho;
 	bool exportFSBComplexField;
 	bool exportFSBSamples;
@@ -89,6 +90,7 @@ struct BatchConfig {
 	std::vector<MaterialParam> materialParams{ MaterialParam{} };
 	int ompThreads = 12;
 	bool useFSBMono = false;
+	bool useCalderonV1 = false;
 	double fsbRho = 1.2;
 	bool exportFSBComplexField = false;
 	bool exportFSBSamples = false;
@@ -140,6 +142,7 @@ struct BatchConfig {
 							task.muR_imag = material.muR_imag;
 							task.ompThreads = ompThreads;
 							task.useFSBMono = useFSBMono;
+							task.useCalderonV1 = useCalderonV1;
 							task.fsbRho = fsbRho;
 							task.exportFSBComplexField = exportFSBComplexField;
 							task.exportFSBSamples = exportFSBSamples;
@@ -399,6 +402,9 @@ public:
 			else if (key == "use_fsb_mono") {
 				cfg.useFSBMono = parseBool(value);
 			}
+			else if (key == "calderon_v1") {
+				cfg.useCalderonV1 = parseBool(value);
+			}
 			else if (key == "fsb_rho") {
 				cfg.fsbRho = std::stod(value);
 			}
@@ -627,19 +633,6 @@ private:
 			omp_set_dynamic(0);
 			omp_set_num_threads(task.ompThreads);
 
-			if (task.selectMatrixSolver != 0 && task.selectMatrixSolver != 1) {
-				throw std::invalid_argument(
-					"Invalid matrix_solver value: "
-					+ std::to_string(task.selectMatrixSolver)
-					+ " (must be 0 for GMRES or 1 for CGS)");
-			}
-
-			if (task.selectAlgorithm < 0 || task.selectAlgorithm > 2) {
-				throw std::invalid_argument("Invalid algorithm value: " + std::to_string(task.selectAlgorithm));
-			}
-			if (task.selectIntegralEqu < 0 || task.selectIntegralEqu > 2) {
-				throw std::invalid_argument("Invalid integral_equation value: " + std::to_string(task.selectIntegralEqu));
-			}
 			if (task.selectMono_Dual != "mono" && task.selectMono_Dual != "dual") {
 				throw std::invalid_argument("Invalid mono_dual value: " + task.selectMono_Dual);
 			}
@@ -657,6 +650,7 @@ private:
 			cfg.scaPhiEnd = task.sca_ph_f;
 			cfg.scaStep = task.step;
 			cfg.useFSBMono = task.useFSBMono;
+			cfg.useCalderonV1 = task.useCalderonV1;
 			cfg.fsbRho = task.fsbRho;
 			cfg.exportFSBComplexField = task.exportFSBComplexField;
 			cfg.exportFSBSamples = task.exportFSBSamples;
@@ -679,11 +673,10 @@ private:
 			cfg.acaRHSCheckCount = task.acaRHSCheckCount;
 			cfg.exportACARHSFactors = task.exportACARHSFactors;
 			if (cfg.integralEqu == IntegralEquation::PMCHWT) {
-				cfg.material = materialType::Die;
 				cfg.epsilonR = {task.epsilonR_real, task.epsilonR_imag};
 				cfg.muR = {task.muR_real, task.muR_imag};
 			}
-			cfg.validate();
+			cfg.finalizeTask(task.selectMatrixSolver, task.freq);
 			gaussPoints gausspoint(cfg.nPoints);
 
 			std::vector<Point> points;
@@ -703,6 +696,11 @@ private:
 				std::cerr << "Error: RWG generation failed\n";
 				return 2;
 			}
+
+			std::optional<CalderonGeometry> cpGeometry;
+			const CalderonGeometry* cpData = nullptr;
+			if (cfg.useCalderonV1)
+				cpData = &cpGeometry.emplace(points, faces, rwgBases, rwgReport);
 
 			std::optional<OCTree> octree;
 			if (cfg.selectAlgo != selectAlgorithm::MoM) {
@@ -733,7 +731,7 @@ private:
 				}
 				else if (cfg.selectAlgo == selectAlgorithm::MLFMA) {
 					MLFMM mlfmm(cfg, task.selectMatrixSolver, octree->octreeNodes_, octree->octreeNodesDRvec_,
-						rwgBases, octree->maxLevel_, gausspoint, E0, wave);
+						rwgBases, octree->maxLevel_, gausspoint, E0, wave, cpData);
 				}
 
 				std::cout << "  >> Polarization " << polName << " done.\n";
