@@ -116,6 +116,16 @@ static void validate_edges() {
     require(!MCGS::CGS::solve(2, small_x, isotropic + 0, 3, 1e-8, zero_matrix, false), "CGS zero matrix breakdown");
     Complex rhs[2] = {Complex(1, 0), Complex(2, 0)};
     require(!MCGS::CGS::solve(2, small_x, rhs, 3, 1e-8, zero_matrix, false), "CGS alpha breakdown");
+
+    Complex swap_rhs[2] = {1.0, 0.0}, swap_x[2] = {};
+    const auto swap_product = [](int, const Complex* in, Complex* out) {
+        out[0] = in[1];
+        out[1] = in[0];
+    };
+    require(MGMRES::mgmres(2, swap_x, swap_rhs, 2, 2, 0, 1e-8, swap_product, false),
+        "GMRES must rotate the last Arnoldi column before stopping");
+    require(std::abs(swap_x[0]) < 1e-12 && std::abs(swap_x[1] - 1.0) < 1e-12,
+        "GMRES happy-breakdown solution");
 #ifdef MLFMA_TEST_BASELINE
     // Record existing happy-breakdown behavior rather than changing the algorithm.
     Complex baseline_x[2] = {};

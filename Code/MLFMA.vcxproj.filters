@@ -140,6 +140,9 @@
     <ClInclude Include="PathUtils.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="CalderonV1.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="SolverVectorOps.h">
       <Filter>头文件</Filter>
     </ClInclude>

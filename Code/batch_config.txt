@@ -36,6 +36,9 @@ matrix_solver = 0
 
 mono_dual = mono
 
+# Calderon v1: static MLFMA PMCHWT only (algorithm = 2, integral_equation = 2).
+calderon_v1 = false
+
 # ============ FSB ============
 # FSB mono acceleration: 0 = off, 1 = on
 # Only takes effect for mono runs; fsb_rho is the oversampling factor W = rho*k*a.

@@ -19,12 +19,13 @@ MLFMM::MLFMM(
 	const std::vector<std::vector<OCTree::Node*>>& octreeNodes,
 	const std::vector<std::vector<OCTree::nodePoint>>& octreeNodesDRvec_,
 	const std::vector<RWGBase>& rwgs, const int maxLevel_,
-	const gaussPoints& gausspoint, const double E0, const EMSource& wave)
+	const gaussPoints& gausspoint, const double E0, const EMSource& wave,
+	const CalderonGeometry* cpData)
 	: octreeNodes_(octreeNodes), octreeNodesDRvec_(octreeNodesDRvec_), rwgs(rwgs), maxLevel_(maxLevel_), gausspoint(gausspoint), E0(E0), wave(wave), integralEquType_(static_cast<int>(cfg.integralEqu)), matrixSolverType_(selectMatrixSolver)
 {
 	// Compute base data: k, top level theta, L, levelSpan
 	// Compute Vsmi/Vfmj matrices theta/phi angles and weights from maxLevel_ down to level 2
-	AlgoMLFMM::computeBase_MLFMM(octreeNodes_, wave, integralEquType_, maxLevel_, static_cast<int>(rwgs.size()), L_k1, L_k2, row, levelSpan,
+	AlgoMLFMM::computeBase_MLFMM(octreeNodes_, wave.k1_abs(), wave.k2_abs(), integralEquType_, maxLevel_, static_cast<int>(rwgs.size()), L_k1, L_k2, row, levelSpan,
 		WGL_k1, WGL_k2, WGL_phi_k1, WGL_phi_k2, theta_level_k1, theta_level_k2, phi_level_k1, phi_level_k2, kp_lvl_k1, kp_lvl_k2);
 
 	if (integralEquType_ != 2) {
@@ -104,6 +105,7 @@ MLFMM::MLFMM(
 			row, wave, gausspoint, 1);
 
 		initDIEWorkspace();
+		if (cpData) calderon_.emplace(*cpData, wave, gausspoint, cfg.nasPath);
 
 		if (cfg.monoDual == MonoDual::Dual) {
 			mlfmm_Dual_Die_Pmchwt(cfg);
@@ -370,33 +372,38 @@ void MLFMM::matrix_solver(int n, std::complex<double> x[], std::complex<double> 
 			return;
 		}
 		};
-	bool converged = false;
+	using Complex = std::complex<double>;
+	std::cout << "Matrix solver: " << (matrixSolverType_ == 0 ? "GMRES" : "CGS") << " (MLFMM)\n";
+	const auto solve = [&](const auto& product, const Complex* b, double absTol, double relTol) {
+		if (matrixSolverType_ == 0)
+			return MGMRES::mgmres(n, x, b, itr_max, mr, absTol, relTol, product);
+		return MCGS::CGS::solve(n, x, b, itr_max, relTol, product);
+	};
 
-	switch (matrixSolverType_) {
-	case 0:
-		std::cout << "Matrix solver: GMRES (MLFMM)\n";
-		converged = MGMRES::mgmres(
-			n, x, rhs, itr_max, mr, tol_abs, tol_rel, ax);
-		if (!converged) {
-			std::cerr << "GMRES did not converge (MLFMM).\n";
-		}
-		break;
-
-	case 1:
-		std::cout << "Matrix solver: CGS (MLFMM)\n";
-		converged = MCGS::CGS::solve(
-			n, x, rhs, itr_max, tol_rel, ax);
-		if (!converged) {
-			std::cerr
-				<< "CGS did not converge or encountered breakdown (MLFMM).\n";
-		}
-		break;
-
-	default:
-		throw std::invalid_argument(
-			"Invalid matrixSolverType_ in MLFMM "
-			"(must be 0 for GMRES or 1 for CGS)");
+	if (!calderon_) {
+		if (!solve(ax, rhs, tol_abs, tol_rel))
+			std::cerr << "Krylov solver did not converge (MLFMM)\n";
+		return;
 	}
+
+	std::vector<Complex> bLeft(n), raw(n);
+	auto& cp = *calderon_;
+	cp.apply(rhs, bLeft.data());
+	const auto leftProduct = [&](int dim, const Complex* in, Complex* out) {
+		ax(dim, in, raw.data());
+		cp.apply(raw.data(), out);
+	};
+	const bool leftConverged = solve(leftProduct, bLeft.data(), 0.0, 0.1 * tol_rel);
+	ax(n, x, raw.data());
+	const double residual = SolverVectorOps::residual_norm(n, rhs, raw.data(), raw.data());
+	const double bound = std::max(tol_abs, tol_rel * SolverVectorOps::norm2(n, rhs));
+	const auto flags = std::cout.flags();
+	std::cout << "Calderon: transformed converged=" << leftConverged << std::scientific
+		<< ", original MLFMA residual=" << residual
+		<< ", physical tolerance=" << bound << '\n';
+	std::cout.flags(flags);
+	if (!(residual <= bound))
+		throw std::runtime_error("Calderon: original PMCHWT residual exceeds tolerance");
 }
 
 void MLFMM::mlfmm_Dual_Pec_Efie(const RCSExportConfig& cfg)

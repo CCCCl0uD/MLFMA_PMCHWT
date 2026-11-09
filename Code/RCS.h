@@ -427,13 +427,9 @@ namespace RCSUtils {
 		int itr_max = 2 * solver.row, mr = 50;
 		double tol_abs = 1.0e-8;
 		double tol_rel = 1.0e-4;
-		std::complex<double>* I_solve = new std::complex<double>[totalRow];
-		std::complex<double>* Vec_R = new std::complex<double>[totalRow];
-		for (int i = 0; i < totalRow; ++i) {
-			I_solve[i] = std::complex<double>(0.0, 0.0);
-			Vec_R[i] = solver.Vm[i];
-		}
-		solver.matrix_solver(totalRow, I_solve, Vec_R,
+		std::vector<std::complex<double>> solveStorage(totalRow);
+		auto* I_solve = solveStorage.data();
+		solver.matrix_solver(totalRow, I_solve, solver.Vm.data(),
 			itr_max, mr, tol_abs, tol_rel);
 
 		// ǰ N = I_J, �� N = I_M
@@ -473,8 +469,6 @@ namespace RCSUtils {
 			}
 		}
 		size_t mem = solver.computeMem();
-		delete[] I_solve;
-		delete[] Vec_R;
 		rcsFile << "\n\nMoM memory = "
 			<< mem / (1024.0 * 1024.0) << " MB\n";
 		rcsFile.close();
@@ -524,13 +518,9 @@ namespace RCSUtils {
 				int itr_max = 2 * solver.row, mr = 50;
 				double tol_abs = 1.0e-8;
 				double tol_rel = 1.0e-4;
-				std::complex<double>* I_solve = new std::complex<double>[totalRow];
-				std::complex<double>* Vec_R = new std::complex<double>[totalRow];
-				for (int i = 0; i < totalRow; ++i) {
-					I_solve[i] = 0.0;
-					Vec_R[i] = solver.Vm[i];
-				}
-				solver.matrix_solver(totalRow, I_solve, Vec_R,
+				std::vector<std::complex<double>> solveStorage(totalRow);
+				auto* I_solve = solveStorage.data();
+				solver.matrix_solver(totalRow, I_solve, solver.Vm.data(),
 					itr_max, mr, tol_abs, tol_rel);
 
 				std::complex<double>* I_J = I_solve;
@@ -562,9 +552,6 @@ namespace RCSUtils {
 					<< std::endl;
 				std::cout << "PMCHWT mono angle point " << (idx + 1) << " / " << totalPoints
 					<< " completed: theta=" << th_mono << ", phi=" << ph_mono << std::endl;
-
-				delete[] I_solve;
-				delete[] Vec_R;
 			}
 		}
 		rcsFile.close();
