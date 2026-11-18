@@ -2,12 +2,17 @@
 #ifndef BATCHRUNNER_H
 #define BATCHRUNNER_H
 
+#include <algorithm>
 #include <array>
 #include <climits>
 #include <cstddef>
 #include <string>
 #include <vector>
+#include <filesystem>
 #include <fstream>
+#include <iomanip>
+#include <limits>
+#include <locale>
 #include <sstream>
 #include <iostream>
 #include <stdexcept>
@@ -76,6 +81,7 @@ struct SimTask {
 struct BatchConfig {
 	std::vector<std::string> nasFiles;
 	std::vector<double> frequencies;
+	bool mergeRcsOutput = false;
 	std::vector<std::pair<double, double>> incidentAngles;
 
 	double sca_th_s = 0.0, sca_th_f = 180.0;
@@ -188,6 +194,7 @@ public:
 		bool hasGlobalMu = false;
 		double globalMuReal = 1.0;
 		double globalMuImag = 0.0;
+		std::string frequencyKey;
 
 		std::string line;
 		std::size_t lineNo = 0;
@@ -202,13 +209,20 @@ public:
 			std::string value = trim(line.substr(pos + 1));
 
 			if (key == "nas_files") {
-				cfg.nasFiles = splitString(value, ';');
+				cfg.nasFiles = parseNasFiles(value, configPath, lineNo);
 			}
-			else if (key == "frequencies") {
-				cfg.frequencies.clear();
-				for (const auto& s : splitString(value, ',')) {
-					cfg.frequencies.push_back(std::stod(s));
+			else if (key == "frequencies" || key == "frequency_range") {
+				if (!frequencyKey.empty() && frequencyKey != key) {
+					throw configValueError(key, value, lineNo,
+						"frequencies and frequency_range are mutually exclusive");
 				}
+				frequencyKey = key;
+				cfg.frequencies = key == "frequency_range"
+					? parseFrequencyRange(value, key, lineNo)
+					: parseFrequencyList(value, key, lineNo);
+			}
+			else if (key == "merge_rcs_output") {
+				cfg.mergeRcsOutput = parseBool(value);
 			}
 			else if (key == "incident_angles") {
 				cfg.incidentAngles.clear();
@@ -220,9 +234,9 @@ public:
 				}
 			}
 			else if (key == "incident_theta_range" || key == "incident_phi_range") {
-				const auto [start, end, step] = parseIncidentRange(value, key, lineNo);
+				const auto [start, end, step] = parseRange(value, key, lineNo);
 				const auto rangeError = [&](const char* message) {
-					return incidentRangeError(key, value, lineNo, message);
+					return configValueError(key, value, lineNo, message);
 				};
 
 				if (key == "incident_theta_range") {
@@ -473,17 +487,73 @@ public:
 	}
 
 private:
-	static std::invalid_argument incidentRangeError(const std::string& key,
+	static std::invalid_argument configValueError(const std::string& key,
 		const std::string& value, std::size_t lineNo, const char* message) {
 		return std::invalid_argument("Line " + std::to_string(lineNo) + ": " + key + " = " + value + " (" + message + ")");
 	}
 
-	static std::array<double, 3> parseIncidentRange(const std::string& value,
+	static std::vector<std::string> parseNasFiles(const std::string& value,
+		const std::string& configPath, std::size_t lineNo) {
+		namespace fs = std::filesystem;
+		auto files = splitString(value, ';');
+		fs::path configDirectory;
+		for (auto& entry : files) {
+			const auto pathError = [&](const std::string& message) {
+				return configValueError("nas_files", entry, lineNo, message.c_str());
+			};
+			try {
+				const fs::path input(entry);
+				if (input.is_absolute()) continue;
+
+				const fs::path parent = input.parent_path();
+				if (input.has_root_path() || (!parent.empty() && parent != ".") ||
+					entry.find_first_of(":*?") != std::string::npos) {
+					throw pathError("expected a NAS filename in the batch configuration directory");
+				}
+				std::string extension = input.extension().string();
+				for (char& ch : extension) {
+					ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+				}
+				if (extension != ".nas") throw pathError("expected a .nas file");
+
+				if (configDirectory.empty()) {
+					configDirectory = fs::canonical(fs::absolute(configPath).parent_path());
+				}
+				const fs::path candidate = configDirectory / input.filename();
+				const fs::path resolved = fs::canonical(candidate);
+				if (!fs::is_regular_file(resolved)) {
+					throw pathError("expected a regular NAS file at " + candidate.string());
+				}
+				if (!fs::equivalent(resolved.parent_path(), configDirectory)) {
+					throw pathError("NAS path resolves outside the batch configuration directory: " +
+						candidate.string() + " -> " + resolved.string());
+				}
+				entry = resolved.string();
+			}
+			catch (const fs::filesystem_error& e) {
+				throw pathError(e.what());
+			}
+		}
+		return files;
+	}
+
+	static bool parseFiniteNumber(const std::string& field, double& number) {
+		std::size_t consumed = 0;
+		try {
+			number = std::stod(field, &consumed);
+		}
+		catch (const std::logic_error&) {
+			return false;
+		}
+		return consumed == field.size() && std::isfinite(number);
+	}
+
+	static std::array<double, 3> parseRange(const std::string& value,
 		const std::string& key, std::size_t lineNo) {
 		const auto first = value.find(':');
 		const auto second = first == std::string::npos ? first : value.find(':', first + 1);
 		if (second == std::string::npos || value.find(':', second + 1) != std::string::npos) {
-			throw incidentRangeError(key, value, lineNo, "expected start:end:step");
+			throw configValueError(key, value, lineNo, "expected start:end:step");
 		}
 
 		const std::array<std::string, 3> fields{
@@ -493,19 +563,61 @@ private:
 		};
 		std::array<double, 3> range{};
 		for (std::size_t i = 0; i < fields.size(); ++i) {
-			const auto field = trim(fields[i]);
-			std::size_t consumed = 0;
-			try {
-				range[i] = std::stod(field, &consumed);
-			}
-			catch (const std::logic_error&) {
-				throw incidentRangeError(key, value, lineNo, "expected three finite numbers");
-			}
-			if (consumed != field.size() || !std::isfinite(range[i])) {
-				throw incidentRangeError(key, value, lineNo, "expected three finite numbers");
+			if (!parseFiniteNumber(trim(fields[i]), range[i])) {
+				throw configValueError(key, value, lineNo, "expected three finite numbers");
 			}
 		}
 		return range;
+	}
+
+	static std::vector<double> parseFrequencyList(const std::string& value,
+		const std::string& key, std::size_t lineNo) {
+		const auto fields = splitString(value, ',');
+		if (fields.empty()) {
+			throw configValueError(key, value, lineNo, "expected at least one frequency in Hz");
+		}
+		std::vector<double> frequencies;
+		frequencies.reserve(fields.size());
+		for (const auto& field : fields) {
+			double frequency = 0.0;
+			if (!parseFiniteNumber(field, frequency) || frequency <= 0.0) {
+				throw configValueError(key, value, lineNo, "expected positive finite frequencies in Hz");
+			}
+			frequencies.push_back(frequency);
+		}
+		return frequencies;
+	}
+
+	static std::vector<double> parseFrequencyRange(const std::string& value,
+		const std::string& key, std::size_t lineNo) {
+		const auto [start, end, step] = parseRange(value, key, lineNo);
+		if (start <= 0.0 || end < start || step <= 0.0) {
+			throw configValueError(key, value, lineNo, "expected 0 < start <= end and step > 0 in Hz");
+		}
+
+		constexpr std::size_t maxSweepPoints = 100'000;
+		std::vector<double> frequencies{start};
+		if (start == end) return frequencies;
+
+		const double endSpacing = end - std::nextafter(end, 0.0);
+		const double tolerance = std::min(2.0 * endSpacing, step / 8.0);
+		for (std::size_t i = 1; ; ++i) {
+			const double frequency = std::fma(static_cast<double>(i), step, start);
+			const double delta = frequency - end;
+			if (delta > tolerance) break;
+			if (frequency <= frequencies.back()) {
+				throw configValueError(key, value, lineNo, "frequency step does not advance the frequency");
+			}
+			if (frequencies.size() == maxSweepPoints) {
+				throw configValueError(key, value, lineNo, "too many frequency points (maximum 100000)");
+			}
+			if (std::abs(delta) <= tolerance) {
+				frequencies.push_back(end);
+				break;
+			}
+			frequencies.push_back(frequency);
+		}
+		return frequencies;
 	}
 
 	static int parseSelection(const std::string& value, const std::string& key) {
@@ -554,16 +666,51 @@ class BatchRunner {
 public:
 	static void run(const std::string& configPath) {
 		BatchConfig batchCfg = BatchConfigParser::parse(configPath);
-		ScopedRunLogger runLogger(makeBatchLogPath(configPath));
+		std::vector<SimTask> tasks = batchCfg.generateTasks();
+		std::optional<ScopedRunLogger> runLogger;
+		std::ofstream sweepOutput;
+		std::filesystem::path sweepPath, partialPath;
 
 		std::cout << "========================================\n";
 		std::cout << " Algorithm Batch Simulation Runner\n";
 		std::cout << "========================================\n\n";
-		if (runLogger.enabled()) {
-			std::cout << "Run log file: " << runLogger.path() << "\n\n";
+		if (batchCfg.mergeRcsOutput) {
+			if (batchCfg.selectMono_Dual != "mono" || batchCfg.selectIntegralEqu != 1 ||
+				batchCfg.useFSBMono || batchCfg.useFSBMLFMAMoving ||
+				batchCfg.useAccurateMLFMAMoving || batchCfg.useACARHSMoving || batchCfg.useCalderonV1 ||
+				std::any_of(batchCfg.selectAlgorithms.begin(), batchCfg.selectAlgorithms.end(),
+					[](int algorithm) { return algorithm != 2; })) {
+				throw std::invalid_argument("merge_rcs_output requires ordinary static monostatic MLFMA-CFIE");
+			}
+			if (tasks.empty()) throw std::invalid_argument("merge_rcs_output requires at least one simulation task");
+
+			const std::filesystem::path directory(getParentPath(configPath));
+			const std::string stem = getBaseName(configPath) + "_RCS_SWEEP_" + getCurrentTimeString();
+			std::string name = stem;
+			for (std::size_t suffix = 2; ; ++suffix) {
+				sweepPath = directory / (name + ".txt");
+				partialPath = directory / (name + ".part");
+				if (!std::filesystem::exists(sweepPath) && !std::filesystem::exists(partialPath)) break;
+				name = stem + "_" + std::to_string(suffix);
+			}
+			sweepOutput.open(partialPath);
+			if (!sweepOutput) throw std::runtime_error("Failed to open RCS sweep output: " + partialPath.string());
+			sweepOutput.imbue(std::locale::classic());
+			sweepOutput << "task_id\tfrequency_hz\tincident_pol\ttheta_deg\tphi_deg"
+				"\trcs_total_dbsm\trcs_v_dbsm\trcs_h_dbsm\n";
+			sweepOutput.flush();
+			if (!sweepOutput) throw std::runtime_error("Failed to write RCS sweep header: " + partialPath.string());
+			std::cout << "RCS sweep output: " << sweepPath.string() << "\n\n";
+		}
+		else {
+			runLogger.emplace(makeBatchLogPath(configPath));
+			if (runLogger->enabled()) {
+				std::cout << "Run log file: " << runLogger->path() << "\n\n";
+			}
 		}
 
-		std::vector<SimTask> tasks = batchCfg.generateTasks();
+		auto* mergedRcs = batchCfg.mergeRcsOutput ? &sweepOutput : nullptr;
+		const bool numberOutputTasks = batchCfg.mergeRcsOutput || batchCfg.frequencies.size() > 1;
 
 		std::cout << "Total tasks: " << tasks.size()
 			<< " (x2 polarizations = " << tasks.size() * 2 << " runs)\n\n";
@@ -599,7 +746,20 @@ public:
 			std::cout << "----------------------------------------\n";
 
 			auto taskStart = std::chrono::high_resolution_clock::now();
-			int ret = executeSingleTask(task);
+			int ret = executeSingleTask(task, numberOutputTasks ? i + 1 : 0, mergedRcs);
+			if (mergedRcs) {
+				mergedRcs->flush();
+				if (ret != 0 || !*mergedRcs) {
+					std::ostringstream error;
+					error << "RCS sweep failed at task " << (i + 1) << " ("
+						<< std::setprecision(std::numeric_limits<double>::max_digits10)
+						<< task.freq << " Hz";
+					if (ret != 0) error << ", code " << ret;
+					else error << ", write error";
+					error << "). Partial results: " << partialPath.string();
+					throw std::runtime_error(error.str());
+				}
+			}
 			auto taskEnd = std::chrono::high_resolution_clock::now();
 
 			double elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -611,6 +771,13 @@ public:
 			else {
 				std::cerr << "[Task " << (i + 1) << "] FAILED (code=" << ret << ")\n\n";
 			}
+		}
+
+		if (mergedRcs) {
+			sweepOutput.close();
+			if (!sweepOutput) throw std::runtime_error("Failed to close RCS sweep output: " + partialPath.string());
+			std::filesystem::rename(partialPath, sweepPath);
+			std::cout << "RCS sweep saved: " << sweepPath.string() << "\n";
 		}
 
 		auto batchEnd = std::chrono::high_resolution_clock::now();
@@ -628,7 +795,7 @@ private:
 			"_RUN_LOG_" + getCurrentTimeString() + ".txt";
 	}
 
-	static int executeSingleTask(const SimTask& task) {
+	static int executeSingleTask(const SimTask& task, std::size_t outputTaskIndex, std::ostream* mergedRcs) {
 		try {
 			omp_set_dynamic(0);
 			omp_set_num_threads(task.ompThreads);
@@ -638,6 +805,18 @@ private:
 			}
 
 			RCSExportConfig cfg(task.nasFile);
+			if (mergedRcs) {
+				cfg.mergedRcs = mergedRcs;
+				cfg.sweepTaskIndex = outputTaskIndex;
+				cfg.sweepFrequencyHz = task.freq;
+			}
+			else if (outputTaskIndex != 0) {
+				std::ostringstream tag;
+				tag.imbue(std::locale::classic());
+				tag << "_f" << std::defaultfloat << std::setprecision(std::numeric_limits<double>::max_digits10)
+					<< task.freq << "Hz_t" << outputTaskIndex;
+				cfg.batchOutputTag = tag.str();
+			}
 			cfg.selectAlgo = static_cast<selectAlgorithm>(task.selectAlgorithm);
 			cfg.integralEqu = static_cast<IntegralEquation>(task.selectIntegralEqu);
 			cfg.monoDual = (task.selectMono_Dual == "mono") ? MonoDual::Mono : MonoDual::Dual;

@@ -3,8 +3,10 @@
 #ifndef RCS_EXPORT_CONFIG_H
 #define RCS_EXPORT_CONFIG_H
 #include <complex>
+#include <cstddef>
 #include <filesystem>
 #include <fstream>
+#include <ostream>
 #include <string>
 #include <stdexcept>
 #include <sstream>
@@ -60,6 +62,10 @@ struct RCSExportConfig {
 	std::string parentPath;
 	std::string baseName;
 	std::string fixedTimeStamp;
+	std::string batchOutputTag;
+	std::ostream* mergedRcs{ nullptr };
+	std::size_t sweepTaskIndex{ 0 };
+	double sweepFrequencyHz{ 0.0 };
 
 	// Ĭ�Ϲ��캯��
 	RCSExportConfig() = default;
@@ -235,7 +241,7 @@ struct RCSExportConfig {
 	std::string buildFilePath(const std::string& suffix, const std::string& extension = "txt") const {
 		namespace fs = std::filesystem;
 		std::string time = getTimeStamp();
-		std::string filename = baseName + "_" + toCoreString() + suffix + "_" + time + "." + extension;
+		std::string filename = baseName + "_" + toCoreString() + batchOutputTag + suffix + "_" + time + "." + extension;
 		return (fs::path(parentPath) / filename).string();
 	}
 	// ֱ�Ӵ��ļ������� ofstream (mode Ĭ�ϲ���Ϊstd::ios::out => �ı�ģʽ|  std::ios::binary => ������ģʽ)

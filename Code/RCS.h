@@ -12,6 +12,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <utility>
 #include <vector>
 
@@ -314,9 +315,23 @@ namespace RCSUtils {
 
 	template<typename SolverType, typename ComputeVFunc>
 	inline void computeMonoStatic(SolverType& solver, const RCSExportConfig& cfg, ComputeVFunc computeV) {
-		auto rcsFile = cfg.openFile("_RCS", "txt");
-		//auto iFile = cfg.openFile("_I", "txt");
-		//auto vFile = cfg.openFile("_V", "txt");
+		std::ofstream rcsFile;
+		if (!cfg.mergedRcs) rcsFile = cfg.openFile("_RCS", "txt");
+		std::ostream& rcsOutput = cfg.mergedRcs ? *cfg.mergedRcs : rcsFile;
+		const std::string polWave = cfg.polWaveStr();
+		const double data_pol = (polWave == "V") ? 0.0 : 90.0;
+		const auto writeRow = [&](double theta, double phi, int angleIndex, const RCSGridValue& point) {
+			if (cfg.mergedRcs) {
+				rcsOutput << cfg.sweepTaskIndex << '\t'
+					<< std::defaultfloat << std::setprecision(std::numeric_limits<double>::max_digits10)
+					<< cfg.sweepFrequencyHz << '\t' << polWave << '\t';
+			}
+			rcsOutput << std::fixed << std::setprecision(12) << std::setw(cfg.mergedRcs ? 0 : 16)
+				<< theta << '\t' << phi << '\t';
+			if (!cfg.mergedRcs) rcsOutput << angleIndex << '\t';
+			rcsOutput << point.rcs << '\t' << point.rcs_v << '\t' << point.rcs_h << '\n';
+			if (!cfg.mergedRcs) rcsOutput.flush();
+		};
 		const int thetaNum = calculateAngleCount(cfg.scaThetaStart, cfg.scaThetaEnd, cfg.scaStep);
 		const int phiNum = calculateAngleCount(cfg.scaPhiStart, cfg.scaPhiEnd, cfg.scaStep);
 		const int totalPoints = thetaNum * phiNum;
@@ -331,16 +346,12 @@ namespace RCSUtils {
 				double ph_mono = calculateAngleAt(
 					cfg.scaPhiStart, cfg.scaPhiEnd, cfg.scaStep, ip, phiNum);
 				if (thetaPole && hasPoleValue) {
-					rcsFile << std::fixed << std::setprecision(12);
-					rcsFile << std::setw(16) << th_mono << "\t" << ph_mono << "\t" << idx << "\t"
-						<< poleValue.rcs << "\t" << poleValue.rcs_v << "\t" << poleValue.rcs_h << std::endl;
+					writeRow(th_mono, ph_mono, idx, poleValue);
 					std::cout << "Mono pole angle point " << (idx + 1) << " / " << totalPoints
 						<< " copied: theta=" << th_mono << ", phi=" << ph_mono << std::endl;
 					continue;
 				}
 				const double ph_compute = thetaPole ? canonicalPolePhiDeg() : ph_mono;
-				std::string pol_wave = cfg.polWaveStr();
-				double data_pol = (pol_wave == "V") ? 0.0 : 90.0;
 
 				double kinc[3], einc[3], hinc[3];
 				EMSource pw;
@@ -383,14 +394,12 @@ namespace RCSUtils {
 				double rcs = 10.0 * log10((norm(E_v) + norm(E_h)) / (4.0 * Pi));
 				double rcs_v = 10.0 * log10(norm(E_v) / (4.0 * Pi));
 				double rcs_h = 10.0 * log10(norm(E_h) / (4.0 * Pi));
+				const RCSGridValue point{rcs, rcs_v, rcs_h};
 				if (thetaPole) {
-					poleValue.rcs = rcs;
-					poleValue.rcs_v = rcs_v;
-					poleValue.rcs_h = rcs_h;
+					poleValue = point;
 					hasPoleValue = true;
 				}
-				rcsFile << std::fixed << std::setprecision(12);
-				rcsFile << std::setw(16) << th_mono << "\t" << ph_mono << "\t" << idx << "\t" << rcs << "\t" << rcs_v << "\t" << rcs_h << std::endl;
+				writeRow(th_mono, ph_mono, idx, point);
 				std::cout << "Mono angle point " << (idx + 1) << " / " << totalPoints
 					<< " completed: theta=" << th_mono << ", phi=" << ph_mono << std::endl;
 
@@ -398,9 +407,7 @@ namespace RCSUtils {
 				delete[] Vec_R;
 			}
 		}
-		rcsFile.close();
-		/*iFile.close();
-		vFile.close();*/
+		if (rcsFile.is_open()) rcsFile.close();
 		std::cout << "RCS export completed." << std::endl;
 	}
 
