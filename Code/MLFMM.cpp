@@ -194,7 +194,6 @@ void MLFMM::matrix_solver(int n, std::complex<double> x[], std::complex<double> 
 	}
 
 	auto ax = [this, EquType_](int n, const std::complex<double>* x, std::complex<double>* w) {
-
 		// ============ PEC ============
 		if (EquType_ != 2) {
 			const int maxlvl = maxLevel_;
@@ -378,7 +377,7 @@ void MLFMM::matrix_solver(int n, std::complex<double> x[], std::complex<double> 
 		if (matrixSolverType_ == 0)
 			return MGMRES::mgmres(n, x, b, itr_max, mr, absTol, relTol, product);
 		return MCGS::CGS::solve(n, x, b, itr_max, relTol, product);
-	};
+		};
 
 	if (!calderon_) {
 		if (!solve(ax, rhs, tol_abs, tol_rel))
@@ -392,7 +391,7 @@ void MLFMM::matrix_solver(int n, std::complex<double> x[], std::complex<double> 
 	const auto leftProduct = [&](int dim, const Complex* in, Complex* out) {
 		ax(dim, in, raw.data());
 		cp.apply(raw.data(), out);
-	};
+		};
 	const bool leftConverged = solve(leftProduct, bLeft.data(), 0.0, 0.1 * tol_rel);
 	ax(n, x, raw.data());
 	const double residual = SolverVectorOps::residual_norm(n, rhs, raw.data(), raw.data());
